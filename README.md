@@ -29,7 +29,6 @@ Patients in a vegetative state (UWS) are defined as being in an **Open-Loop Stat
 ## 📊 System Architecture & Computational Loop
 
 The data pipeline consists of an optimized 3-stage linear processing loop that operates in real-time on surface biopotentials to extract intent and trigger physical afferent feedback.
-
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -152,3 +151,4 @@ plt.tight_layout()
 plt.savefig('arcf_simulation_result.png', dpi=300)
 print("Simulation plot saved as 'arcf_simulation_result.png' (300 DPI).")
 plt.show()
+
