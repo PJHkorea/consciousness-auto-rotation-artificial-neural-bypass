@@ -30,61 +30,68 @@ Patients in a vegetative state (UWS) are defined as being in an **Open-Loop Stat
 
 The data pipeline consists of an optimized 3-stage linear processing loop that operates in real-time on surface biopotentials to extract intent and trigger physical afferent feedback.
 # Technical Specification & Source Code: ARCF System
-
 This document provides the definitive mathematical formulation and the production-ready Python implementation for the Autobiographical Resonance-based Closed-loop Filter (ARCF).
 
 ## Part 1: Mathematical Formulation & Core Components
-
 The ARCF features an optimized two-state model augmented with a non-linear informational binder. The core processing pipeline executes via a static-typed Numba JIT environment, providing deterministic real-time performance and total immunity against numerical covariance collapse.
 
 ### 1. Phase 1: Real-Time Signal Conditioning
-Primary elimination of the 60 Hz power-line artifact from the raw cranial biopotential ($Y_{\text{raw}}$) is executed using a high-Q Infinite Impulse Response (IIR) digital notch filter to preserve hidden cognitive potentials ($Y_{\text{ccl}}$):
+Primary elimination of the 60 Hz power-line artifact from the raw cranial biopotential ($Y_{\text{raw}}$) is executed using an inline digital Infinite Impulse Response (IIR) notch filter operating in Direct Free Form II structure to preserve hidden cognitive potentials ($Y_{\text{ccl}}$):
 
-$$Y_{\text{ccl}}[k] = \mathcal{L}_{\text{notch}}\left(Y_{\text{raw}}[k]\right)$$
+$$Y_{\text{ccl}}[k] = \mathcal{L}_{\text{notch}}(Y_{\text{raw}}[k])$$
+
+An exact analytical feed-forward compensation for the frequency-dependent phase delay ($\phi_{\text{delay}}$) at the tracking target frequency (10 Hz) is integrated directly into the digital domain angular rotation calculation:
+
+$$\theta = 2\pi f \Delta t + \phi_{\text{delay}}$$
 
 ### 2. Phase 2: Physiological Mutual Information Gating
-To prevent motion artifacts or baseline drift from corrupting the state tracker, the conditioned signal is multiplied by a time-varying informational weight ($W_{\text{gate}}$) derived from the causal synchronization profile of the Default Mode Network (DMN) and stabilized by a lower bound constraint:
+To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight ($W_{\text{gate}}$) driven by a continuous sigmoid power synchronization profile:
 
-$$W_{\text{gate}}[k] = \max\left(0.1, \; \text{GatingSchedule}(t_k) + \eta[k]\right), \quad \eta \sim \mathcal{N}(0, \sigma^2)$$
+$$E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{notch}}[k]\right)^2$$
 
-$$Y_{\text{filtered}}[k] = Y_{\text{ccl}}[k] \cdot W_{\text{gate}}[k]$$
+$$W_{\text{gate}}[k] = \max\left(0.1, \,\, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)$$
+
+$$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
 
 ### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
-The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm ($X_{\text{brain}}$) hidden in the filtered potential. The state transition configuration is governed by $\theta = 2\pi f \Delta t$:
+The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm ($X_{\text{brain}}$) hidden in the filtered potential. 
 
 #### A. Time Update (Predictive Step)
-$$\hat{x}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix} \hat{x}_{k-1\vert{}k-1}$$
+$$\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}$$
 
-$$P_{k\vert{}k-1} = A P_{k-1\vert{}k-1} A^T + Q$$
+$$p_{00\_m} = \cos^2\theta \cdot p_{00} + 2\cos\theta\sin\theta \cdot p_{01} + \sin^2\theta \cdot p_{11} + Q$$
+$$p_{01\_m} = -\cos\theta\sin\theta \cdot p_{00} + (\cos^2\theta - \sin^2\theta) \cdot p_{01} + \cos\theta\sin\theta \cdot p_{11}$$
+$$p_{11\_m} = \sin^2\theta \cdot p_{00} - 2\cos\theta\sin\theta \cdot p_{01} + \cos^2\theta \cdot p_{11} + Q$$
 
 #### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
-To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the Joseph Form Equation ($M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}$). This mathematically guarantees code-to-formula synchronization:
+To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the **Joseph Form Equation** ($M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}$):
 
 $$m_0 = 1.0 - k_0$$
 
-$$p_{00}^{\text{new}} = m_0^2 \cdot p_{00}^{m} + k_0^2 \cdot R$$
-
-$$p_{01}^{\text{new}} = m_0 \cdot p_{01}^{m} - m_0 \cdot k_1 \cdot p_{00}^{m} + k_0 \cdot k_1 \cdot R$$
-
-$$p_{11}^{\text{new}} = p_{11}^{m} - 2.0 \cdot k_1 \cdot p_{01}^{m} + k_1^2 \cdot p_{00}^{m} + k_1^2 \cdot R$$
+$$p_{00\_new} = (m_0^2 \cdot p_{00\_m}) + (k_0^2 \cdot R)$$
+$$p_{01\_new} = (-k_1 \cdot m_0 \cdot p_{00\_m}) + (m_0 \cdot p_{01\_m}) + (k_0 \cdot k_1 \cdot R)$$
+$$p_{11\_new} = (k_1^2 \cdot p_{00\_m}) - (2.0 \cdot k_1 \cdot p_{01\_m}) + p_{11\_m} + (k_1^2 \cdot R)$$
 
 #### C. Sub-zero Divergence Guard & Boundary Mapping
 When the innovation covariance falls below safety thresholds due to severe transient noise, boundary mapping prevents zero-division and matrix singularity:
 
-$$\text{If } (p_{00}^{m} + R) \le 10^{-9} \implies \text{Halt Measurement Update Loop}$$
+$$\text{If } (p_{00\_m} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop}$$
 
-$$p_{00} = \max\left(p_{00}^{\text{new}}, 10^{-14}\right), \quad p_{11} = \max\left(p_{11}^{\text{new}}, 10^{-14}\right)$$
+$$p_{00} = \max(p_{00\_new}, 10^{-14}), \quad p_{11} = \max(p_{11\_new}, 10^{-14})$$
 
-The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cross-covariance component, preventing numerical asymmetry and filter explosion:
+The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cross-covariance component against numerical underflow, preventing structural asymmetry and filter explosion:
 
-$$\vert{}p_{01}\vert{} \le \sqrt{p_{00} \cdot p_{11}}$$
+$$p_{\text{prod}} = p_{00} \cdot p_{11}$$
+
+$$|p_{01\_aligned}| \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}$$
 
 ### 4. Phase 4: Actuator Trigger Mapping
-The state vector's root-mean-square energy maps to the probability space ($P_{\text{intent}}$) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
+The state vector's root-mean-square energy maps to the probability space ($P_{\text{state}}$) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
 
-$$P_{\text{intent}}[k] = \frac{1}{1 + e^{-\lambda \left((x_0^2 + x_1^2) - \theta_{\text{baseline}}\right)}}$$
+$$P_{\text{state}}[k] = \frac{1}{1 + e^{-\lambda \left( (x_0^2 + x_1^2) - \theta_{\text{baseline}} \right)}}$$
 
-$$\text{If } P_{\text{intent}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
+$$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
+
 
 ```mermaid
 graph TD
