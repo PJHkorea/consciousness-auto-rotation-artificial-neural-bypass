@@ -86,6 +86,7 @@ $$P_{\text{intent}}[k] = \frac{1}{1 + e^{-\lambda \left((x_0^2 + x_1^2) - \theta
 
 $$\text{If } P_{\text{intent}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
 
+```mermaid
 graph TD
     %% 스타일 정의
     classDef input fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,stroke-dasharray: 5 5;
@@ -134,3 +135,4 @@ graph TD
     style COMP_LOOP fill:#fff,stroke:#333,stroke-width:1px
     style INPUT_STAGE fill:#fff,stroke:#333,stroke-width:1px
     style OUTPUT_STAGE fill:#fff,stroke:#333,stroke-width:1px
+```
