@@ -1,7 +1,7 @@
 # Artificial Neural Bypass for Open-Loop Disorders of Consciousness (DoC)
 > **Theory of Closed-loop Neural Resonance for Consciousness Auto-Rotation**
 
-This repository contains the official framework, mathematical formulation, and a high-performance, numerically stable Python implementation of the **Autobiographical Resonance-based Closed-loop Filter (ARCF)**. This system functions as an artificial neural bypass to restore information loops in patients with Unresponsive Wakefulness Syndrome (UWS) or Minimum Conscious State (MCS).
+This repository contains the official framework, mathematical formulation, and a production-ready, ultra-optimized, and numerically stable real-time Python infrastructure of the **Autobiographical Resonance-based Closed-loop Filter (ARCF)**. This system functions as an artificial neural bypass to restore broken information loops in patients with Unresponsive Wakefulness Syndrome (UWS) or Minimum Conscious State (MCS).
 
 ---
 
@@ -29,69 +29,6 @@ Patients in a vegetative state (UWS) are defined as being in an **Open-Loop Stat
 ## 📊 System Architecture & Computational Loop
 
 The data pipeline consists of an optimized 3-stage linear processing loop that operates in real-time on surface biopotentials to extract intent and trigger physical afferent feedback.
-# Technical Specification & Source Code: ARCF System
-This document provides the definitive mathematical formulation and the production-ready Python implementation for the Autobiographical Resonance-based Closed-loop Filter (ARCF).
-
-## Part 1: Mathematical Formulation & Core Components
-The ARCF features an optimized two-state model augmented with a non-linear informational binder. The core processing pipeline executes via a static-typed Numba JIT environment, providing deterministic real-time performance and total immunity against numerical covariance collapse.
-
-### 1. Phase 1: Real-Time Signal Conditioning
-Primary elimination of the 60 Hz power-line artifact from the raw cranial biopotential ($Y_{\text{raw}}$) is executed using an inline digital Infinite Impulse Response (IIR) notch filter operating in Direct Free Form II structure to preserve hidden cognitive potentials ($Y_{\text{ccl}}$):
-
-$$Y_{\text{ccl}}[k] = \mathcal{L}_{\text{notch}}(Y_{\text{raw}}[k])$$
-
-An exact analytical feed-forward compensation for the frequency-dependent phase delay ($\phi_{\text{delay}}$) at the tracking target frequency (10 Hz) is integrated directly into the digital domain angular rotation calculation:
-
-$$\theta = 2\pi f \Delta t + \phi_{\text{delay}}$$
-
-### 2. Phase 2: Physiological Mutual Information Gating
-To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight ($W_{\text{gate}}$) driven by a continuous sigmoid power synchronization profile:
-
-$$E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{notch}}[k]\right)^2$$
-
-$$W_{\text{gate}}[k] = \max\left(0.1, \,\, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)$$
-
-$$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
-
-### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
-The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm ($X_{\text{brain}}$) hidden in the filtered potential. 
-
-#### A. Time Update (Predictive Step)
-$$\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}$$
-
-$$p_{00\_m} = \cos^2\theta \cdot p_{00} + 2\cos\theta\sin\theta \cdot p_{01} + \sin^2\theta \cdot p_{11} + Q$$
-$$p_{01\_m} = -\cos\theta\sin\theta \cdot p_{00} + (\cos^2\theta - \sin^2\theta) \cdot p_{01} + \cos\theta\sin\theta \cdot p_{11}$$
-$$p_{11\_m} = \sin^2\theta \cdot p_{00} - 2\cos\theta\sin\theta \cdot p_{01} + \cos^2\theta \cdot p_{11} + Q$$
-
-#### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
-To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the **Joseph Form Equation** ($M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}$):
-
-$$m_0 = 1.0 - k_0$$
-
-$$p_{00\_new} = (m_0^2 \cdot p_{00\_m}) + (k_0^2 \cdot R)$$
-$$p_{01\_new} = (-k_1 \cdot m_0 \cdot p_{00\_m}) + (m_0 \cdot p_{01\_m}) + (k_0 \cdot k_1 \cdot R)$$
-$$p_{11\_new} = (k_1^2 \cdot p_{00\_m}) - (2.0 \cdot k_1 \cdot p_{01\_m}) + p_{11\_m} + (k_1^2 \cdot R)$$
-
-#### C. Sub-zero Divergence Guard & Boundary Mapping
-When the innovation covariance falls below safety thresholds due to severe transient noise, boundary mapping prevents zero-division and matrix singularity:
-
-$$\text{If } (p_{00\_m} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop}$$
-
-$$p_{00} = \max(p_{00\_new}, 10^{-14}), \quad p_{11} = \max(p_{11\_new}, 10^{-14})$$
-
-The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cross-covariance component against numerical underflow, preventing structural asymmetry and filter explosion:
-
-$$p_{\text{prod}} = p_{00} \cdot p_{11}$$
-
-$$|p_{01\_aligned}| \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}$$
-
-### 4. Phase 4: Actuator Trigger Mapping
-The state vector's root-mean-square energy maps to the probability space ($P_{\text{state}}$) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
-
-$$P_{\text{state}}[k] = \frac{1}{1 + e^{-\lambda \left( (x_0^2 + x_1^2) - \theta_{\text{baseline}} \right)}}$$
-
-$$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
-
 
 ```mermaid
 graph TD
@@ -143,3 +80,89 @@ graph TD
     style INPUT_STAGE fill:#fff,stroke:#333,stroke-width:1px
     style OUTPUT_STAGE fill:#fff,stroke:#333,stroke-width:1px
 ```
+
+---
+
+## 📐 Technical Specification (Mathematical Formulation)
+
+The ARCF features an optimized two-state model augmented with a non-linear informational binder. The core processing pipeline executes via a static-typed Numba JIT environment, providing deterministic real-time performance and total immunity against numerical covariance collapse.
+
+### 1. Phase 1: Real-Time Signal Conditioning
+Primary elimination of the 60 Hz power-line artifact from the raw cranial biopotential (\(Y_{\text{raw}}\)) is executed using an inline digital Infinite Impulse Response (IIR) notch filter operating in Direct Free Form II structure to preserve hidden cognitive potentials (\(Y_{\text{ccl}}\)):
+
+\[Y_{\text{ccl}}[k] = \mathcal{L}_{\text{notch}}(Y_{\text{raw}}[k])\]
+
+An exact analytical feed-forward compensation for the frequency-dependent phase delay (\(\phi_{\text{delay}}\)) at the tracking target frequency (10 Hz) is integrated directly into the digital domain angular rotation calculation:
+
+\[\theta = 2\pi f \Delta t + \phi_{\text{delay}}\]
+
+### 2. Phase 2: Physiological Mutual Information Gating
+To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight (\(W_{\text{gate}}\)) driven by a continuous sigmoid power synchronization profile:
+
+\[E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{notch}}[k]\right)^2\]
+
+\[W_{\text{gate}}[k] = \max\left(0.1, \,\, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)\]
+
+\[Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]\]
+
+### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
+The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm (\(X_{\text{brain}}\)) hidden in the filtered potential. 
+
+#### A. Time Update (Predictive Step)
+\[\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}\]
+
+\[p_{00\_m} = \cos^2\theta \cdot p_{00} + 2\cos\theta\sin\theta \cdot p_{01} + \sin^2\theta \cdot p_{11} + Q\]
+\[p_{01\_m} = -\cos\theta\sin\theta \cdot p_{00} + (\cos^2\theta - \sin^2\theta) \cdot p_{01} + \cos\theta\sin\theta \cdot p_{11}\]
+\[p_{11\_m} = \sin^2\theta \cdot p_{00} - 2\cos\theta\sin\theta \cdot p_{01} + \cos^2\theta \cdot p_{11} + Q\]
+
+#### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
+To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the **Joseph Form Equation** (\(M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}\)):
+
+\[m_0 = 1.0 - k_0\]
+
+\[p_{00\_new} = (m_0^2 \cdot p_{00\_m}) + (k_0^2 \cdot R)\]
+\[p_{01\_new} = (-k_1 \cdot m_0 \cdot p_{00\_m}) + (m_0 \cdot p_{01\_m}) + (k_0 \cdot k_1 \cdot R)\]
+\[p_{11\_new} = (k_1^2 \cdot p_{00\_m}) - (2.0 \cdot k_1 \cdot p_{01\_m}) + p_{11\_m} + (k_1^2 \cdot R)\]
+
+#### C. Sub-zero Divergence Guard & Boundary Mapping
+When the innovation covariance falls below safety thresholds due to severe transient noise, boundary mapping prevents zero-division and matrix singularity:
+
+\[\text{If } (p_{00\_m} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop}\]
+
+\[p_{00} = \max(p_{00\_new}, 10^{-14}), \quad p_{11} = \max(p_{11\_new}, 10^{-14})\]
+
+The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cross-covariance component against numerical underflow, preventing structural asymmetry and filter explosion:
+
+\[p_{\text{prod}} = p_{00} \cdot p_{11}\]
+
+\[\vert{}p_{01\_aligned}\vert{} \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}\]
+
+### 4. Phase 4: Actuator Trigger Mapping
+The state vector's root-mean-square energy maps to the probability space (\(P_{\text{state}}\)) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
+
+\[P_{\text{state}}[k] = \frac{1}{1 + e^{-\lambda \left( (x_0^2 + x_1^2) - \theta_{\text{baseline}} \right)}}\]
+
+\[\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}\]
+
+---
+
+## 💻 Production-Ready Infrastructure Implementation
+
+This project contains two core architectural modules optimized for high-throughput deployment:
+1. `realtime_bypass_core.py`: Register-optimized, JIT-compiled mathematical kernel executing the ARCF loop.
+2. `realtime_bypass_network.py`: A high-speed TCP/IP networking hub designed with zero-copy stream parsing and real-time fault-tolerance guards to control mechanical hardware.
+
+### Core Mathematical & Signal Processing Kernel
+
+```python
+import numpy as np
+import math
+from numba import njit
+
+# Global Configuration Constants
+EPSILON_INNOV = 1e-9      # Innovation covariance lower bound
+EPSILON_GUARD = 1e-14      # State covariance minimum guard
+EPSILON_PROD = 1e-28       # Cauchy-Schwarz product limit
+GATE_SCALE = -2.5          # Energy gating sensitivity
+GATE_OFFSET = 0.8          # Energy gating threshold center
+LAMBDA_STATE = 7.0         # Sigmoid state transition slope
