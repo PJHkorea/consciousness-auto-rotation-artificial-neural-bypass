@@ -48,7 +48,7 @@ graph TD
     %% 실시간 신호처리 및 연산 레이어
     subgraph COMP_LOOP [ARCF Core Computational Loop]
         Phase1["Phase 1: Linear Impedance Cancellation <br> <i>High-Q IIR Notch Filter Line Elimination</i>"]:::process
-        Phase2["Phase 2: Physiological Mutual Information Gating <br> <i>Vectorized np.select C-Engine Speed</i>"]:::process
+        Phase2["Phase 2: Physiological Mutual Information Gating <br> <i>Fused Numba JIT (nogil=True, fastmath=True)</i>"]:::process
         Phase3["Phase 3: State-Space Minimal Variance Estimation <br> <i>Statically Allocated Scalar Joseph Form Loop</i>"]:::process
     end
 
@@ -158,9 +158,9 @@ This script contains the zero-copy real-time streaming core, Numba LLVM compiled
 # Optimized via explicit scalar registers and Joseph Form Symmetrization
 for i in range(N_samples):
     # Phase 1: Inline IIR Notch Filtering
-    y_notch = b[0] * x_in + v0
-    v0 = b[1] * x_in - a[1] * y_notch + v1
-    v1 = b[2] * x_in - a[2] * y_notch
+    y_notch = b * x_in + v0
+    v0 = b * x_in - a * y_notch + v1
+    v1 = b * x_in - a * y_notch
     
     # Phase 2: Real-time Moving-Average Information Gating
     inst_energy = y_notch * y_notch
