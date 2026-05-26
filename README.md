@@ -138,7 +138,7 @@ The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cros
 
 \[p_{\text{prod}} = p_{00} \cdot p_{11}\]
 
-\[  \vert{}p_{01\_aligned}\vert{} \le \sqrt{\max(p_{\text{prod}}, 10^{-28})} \]
+\[\vert{}p_{01\_aligned}\vert{} \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}\]
 
 ### 4. Phase 4: Actuator Trigger Mapping
 The state vector's root-mean-square energy maps to the probability space (\(P_{\text{state}}\)) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
@@ -184,6 +184,7 @@ for i in range(N_samples):
 ## 🤝 How to Contribute & Collaborate
 
 This project is a global endeavor to democratize neurorehabilitation technologies. We explicitly welcome:
+
 1. **Clinical Research Institutions**: Seeking to implement this protocol in pilot clinical trials.
 2. **DSP / Embedded Engineers**: Optimizing and porting the core scalar arithmetic loops directly into STM32 or FPGA architectures.
 3. **Robotics Researchers**: Adapting the digital TCP/IP control stream interface into proprietary exoskeleton actuator protocols.
