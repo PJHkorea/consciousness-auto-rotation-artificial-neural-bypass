@@ -80,15 +80,16 @@ def execute_realtime_kalman_final(y_ccl, t_arr, noise_arr, cos_t, sin_t, q, R, e
             w_gate = 1.0
             
         y_filt = y_ccl[i] * w_gate
-        y_filt_out[i] = y_filt  # Synchronized hardware buffering for runtime diagnostics
+        y_filt_out[i] = y_filt  
         
-        # Phase 3: Analytical State & Covariance Prediction
-        x0_m = cos_t_f * x0 - sin_t_f * x1
-        x1_m = sin_t_f * x0 + cos_t_f * x1
+        # Phase 3: Analytical State Prediction
+        x0_m =  cos_t_f * x0 + sin_t_f * x1
+        x1_m = -sin_t_f * x0 + cos_t_f * x1
         
-        p00_m = cos_sq * p00 - two_cos_sin * p01 + sin_sq * p11 + q_f
-        p01_m = cos_t_f * sin_t_f * p00 + (cos_sq - sin_sq) * p01 - cos_t_f * sin_t_f * p11
-        p11_m = sin_sq * p00 + two_cos_sin * p01 + cos_sq * p11 + q_f
+        # Covariance Prediction (P_m = A * P * A^T + Q) analytical scalar simplification
+        p00_m = cos_sq * p00 + two_cos_sin * p01 + sin_sq * p11 + q_f
+        p01_m = -cos_t_f * sin_t_f * p00 + (cos_sq - sin_sq) * p01 + cos_t_f * sin_t_f * p11
+        p11_m = sin_sq * p00 - two_cos_sin * p01 + cos_sq * p11 + q_f
         
         # Phase 3: Measurement Update with rigorous Joseph Form expansion
         innov_cov = p00_m + R_f
@@ -102,12 +103,11 @@ def execute_realtime_kalman_final(y_ccl, t_arr, noise_arr, cos_t, sin_t, q, R, e
             x1 = x1_m + k1 * v
             
             m0 = 1.0 - k0
-            k0_R = k0 * R_f
-            k1_R = k1 * R_f
             
-            p00_new = m0 * p00_m * m0 + k0 * k0_R
-            p01_new = m0 * p01_m - k1 * p00_m * m0 + k0 * k1_R
-            p11_new = p11_m - 2.0 * k1 * p01_m + k1 * k1 * p00_m + k1 * k1_R
+            # Compiled mathematical flat scalar variables optimized for hardware pipelines
+            p00_new = (m0 * m0 * p00_m) + (k0 * k0 * R_f)
+            p01_new = (m0 * p01_m) - (k1 * m0 * p00_m) + (k0 * k1 * R_f)
+            p11_new = p11_m - (2.0 * k1 * p01_m) + (k1 * k1 * p00_m) + (k1 * k1 * R_f)
         else:
             x0, x1 = x0_m, x1_m
             p00_new, p01_new, p11_new = p00_m, p01_m, p11_m
@@ -128,9 +128,9 @@ def execute_realtime_kalman_final(y_ccl, t_arr, noise_arr, cos_t, sin_t, q, R, e
         
         energy_out[i] = x0 * x0 + x1 * x1
 
-# Pre-allocating output memory blocks to enforce static memory profiles
+# Pre-allocating output memory blocks to enforce static allocation profiles
 X_intent_energy = np.zeros(N)
-Y_filtered_signal = np.zeros(N) # Static array binding for intermediate signal monitoring
+Y_filtered_signal = np.zeros(N) 
 noise_profile = np.random.normal(0, 0.02, N)
 
 # Direct execution of the fused control kernel
@@ -156,7 +156,7 @@ axs[0].set_title('Phase 1 & 2: Signal Contamination Profiling', fontsize=11, fon
 axs[0].legend(loc='upper right')
 axs[0].grid(True, alpha=0.3)
 
-# Graph 2 (Verified & Linked to Y_filtered_signal)
+# Graph 2
 ax2_twin = axs[1].twinx()
 axs[1].plot(t, Y_filtered_signal, color='blue', alpha=0.6, label='Y_conditioned & Gated(t)')
 ax2_twin.plot(t, 0.1 + 0.8 * active_mask, color='orange', linestyle='--', linewidth=1.5, label='Informational Threshold Gating')
