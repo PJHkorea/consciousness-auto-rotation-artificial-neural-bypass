@@ -1,0 +1,1 @@
+# consciousness-auto-rotation-artificial-neural-bypass
