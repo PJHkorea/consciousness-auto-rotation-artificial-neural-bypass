@@ -106,91 +106,72 @@ $$W_{\text{gate}}[k] = \max\left(0.1, \,\, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E
 $$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
 
 ### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
-The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm (\(X_{\text{brain}}\)) hidden in the filtered potential.
+The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm ($X_{\text{brain}}$) hidden in the filtered potential.
 
 #### A. Time Update (Predictive Step)
-\[\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}\]
+$$
+\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}
+$$
 
-\[p_{00\_m} = \cos^2\theta \cdot p_{00} + 2\cos\theta\sin\theta \cdot p_{01} + \sin^2\theta \cdot p_{11} + Q\]
+$$
+p_{00_\text{m}} = \cos^2\theta \cdot p_{00} + 2\cos\theta\sin\theta \cdot p_{01} + \sin^2\theta \cdot p_{11} + Q
+$$
 
-\[p_{01\_m} = -\cos\theta\sin\theta \cdot p_{00} + (\cos^2\theta - \sin^2\theta) \cdot p_{01} + \cos\theta\sin\theta \cdot p_{11}\]
+$$
+p_{01_\text{m}} = -\cos\theta\sin\theta \cdot p_{00} + (\cos^2\theta - \sin^2\theta) \cdot p_{01} + \cos\theta\sin\theta \cdot p_{11}
+$$
 
-\[p_{11\_m} = \sin^2\theta \cdot p_{00} - 2\cos\theta\sin\theta \cdot p_{01} + \cos^2\theta \cdot p_{11} + Q\]
+$$
+p_{11_\text{m}} = \sin^2\theta \cdot p_{00} - 2\cos\theta\sin\theta \cdot p_{01} + \cos^2\theta \cdot p_{11} + Q
+$$
 
 #### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
-To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the **Joseph Form Equation** (\(M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}\)):
+To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the **Joseph Form Equation** ($M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}$):
 
-\[m_0 = 1.0 - k_0\]
+$$
+m_0 = 1.0 - k_0
+$$
 
-\[p_{00\_new} = (m_0^2 \cdot p_{00\_m}) + (k_0^2 \cdot R)\]
+$$
+p_{00_\text{new}} = (m_0^2 \cdot p_{00_\text{m}}) + (k_0^2 \cdot R)
+$$
 
-\[p_{01\_new} = (-k_1 \cdot m_0 \cdot p_{00\_m}) + (m_0 \cdot p_{01\_m}) + (k_0 \cdot k_1 \cdot R)\]
+$$
+p_{01_\text{new}} = (-k_1 \cdot m_0 \cdot p_{00_\text{m}}) + (m_0 \cdot p_{01_\text{m}}) + (k_0 \cdot k_1 \cdot R)
+$$
 
-\[p_{11\_new} = (k_1^2 \cdot p_{00\_m}) - (2.0 \cdot k_1 \cdot p_{01\_m}) + p_{11\_m} + (k_1^2 \cdot R)\]
+$$
+p_{11_\text{new}} = (k_1^2 \cdot p_{00_\text{m}}) - (2.0 \cdot k_1 \cdot p_{01_\text{m}}) + p_{11_\text{m}} + (k_1^2 \cdot R)
+$$
 
 #### C. Sub-zero Divergence Guard & Boundary Mapping
 When the innovation covariance falls below safety thresholds due to severe transient noise, boundary mapping prevents zero-division and matrix singularity:
 
-\[\text{If } (p_{00\_m} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop}\]
+$$
+\text{If } (p_{00_\text{m}} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop}
+$$
 
-\[p_{00} = \max(p_{00\_new}, 10^{-14}), \quad p_{11} = \max(p_{11\_new}, 10^{-14})\]
+$$
+p_{00_\text{guard}} = \max(p_{00_\text{new}}, 10^{-14}), \quad p_{11_\text{guard}} = \max(p_{11_\text{new}}, 10^{-14})
+$$
 
 The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cross-covariance component against numerical underflow, preventing structural asymmetry and filter explosion:
 
-\[p_{\text{prod}} = p_{00} \cdot p_{11}\]
+$$
+p_{\text{prod}} = p_{00_\text{guard}} \cdot p_{11_\text{guard}}
+$$
 
-\[\lvert p_{01\_aligned} \rvert \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}\]
+$$
+\lvert p_{01_\text{guard}} \rvert \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}
+$$
 
 ### 4. Phase 4: Actuator Trigger Mapping
-The state vector's root-mean-square energy maps to the probability space (\(P_{\text{state}}\)) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
+The state vector's root-mean-square energy maps to the probability space ($P_{\text{state}}$) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
 
-\[P_{\text{state}}[k] = \frac{1}{1 + e^{-\lambda \left( (x_0^2 + x_1^2) - \theta_{\text{baseline}} \right)}}\]
+$$
+P_{\text{state}}\left[ k \right] = \frac{1}{1 + e^{-\lambda \left( (x_0^2 + x_1^2) - \theta_{\text{baseline}} \right)}}
+$$
 
-\[\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}\]
-
----
-
-## 💻 Verified Production Implementation (Python & Network Fused)
-
-This script contains the zero-copy real-time streaming core, Numba LLVM compiled scalar Joseph Form tracking loop, and integrated network latency accumulation defenses. Please check the `realtime_bypass.py` file in this repository for the fully production-ready execution script.
-
-```python
-# Real-Time Causal Core Snippet (From realtime_bypass.py)
-# Optimized via explicit scalar registers and Joseph Form Symmetrization
-for i in range(N_samples):
-    # Phase 1: Inline IIR Notch Filtering
-    y_notch = b * x_in + v0
-    v0 = b * x_in - a * y_notch + v1
-    v1 = b * x_in - a * y_notch
-    
-    # Phase 2: Real-time Moving-Average Information Gating
-    inst_energy = y_notch * y_notch
-    running_energy = (1.0 - ema_alpha) * running_energy + ema_alpha * inst_energy
-    w_gate = 0.1 + (0.9 / (1.0 + math.exp(-2.5 * (running_energy - 0.8))))
-    
-    # Phase 3: Analytical Predictive & Measurement Joseph Form Step
-    x0_m = cos_t * x0 + sin_t * x1
-    x1_m = -sin_t * x0 + cos_t * x1
-    
-    p00_m = cos_sq * p00 + two_cos_sin * p01 + sin_sq * p11 + q
-    p01_m = -cos_sin * p00 + cos_sq_minus_sin_sq * p01 + cos_sin * p11
-    p11_m = sin_sq * p00 - two_cos_sin * p01 + cos_sq * p11 + q
-    
-    # Parallel Tuple Assignment to eliminate Race Conditions
-    p00, p01, p11 = p00_new, p01_guard, p11_guard
-```
-
----
-
-## 🤝 How to Contribute & Collaborate
-
-This project is a global endeavor to democratize neurorehabilitation technologies. We explicitly welcome:
-
-1. **Clinical Research Institutions**: Seeking to implement this protocol in pilot clinical trials.
-2. **DSP / Embedded Engineers**: Optimizing and porting the core scalar arithmetic loops directly into STM32 or FPGA architectures.
-3. **Robotics Researchers**: Adapting the digital TCP/IP control stream interface into proprietary exoskeleton actuator protocols.
-
-To protect the ecosystem from predatory corporate enclosures, all pull requests, feature branches, and software extensions merged into this pipeline will legally inherit the **GNU GPL v3 copyleft mandate**.
-
----
-*Developed under the foundational architecture of the Consciousness Auto-Rotation Theory.*
+$$
+\text{If } P_{\text{state}}\left[ k \right] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}
+$$
