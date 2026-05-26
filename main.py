@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import iirnotch, lfilter
-from numba import njit, float64
+from numba import njit
+import math
 
 # 1. Environment & Simulation Variables (10s, 250Hz sampling rate)
 np.random.seed(42)
@@ -39,17 +40,17 @@ choicelist = [
 W_gate = np.select(condlist, choicelist)
 Y_filtered = Y_ccl * W_gate
 
-# Phase 3: State-Space Minimal Variance Estimation (Optimized Scalar Expansion)
+# Phase 3: State-Space Minimal Variance Estimation (Ultra-Optimized Joseph Form)
 dt = 1/fs
 cos_t = np.cos(2 * np.pi * 10 * dt)
 sin_t = np.sin(2 * np.pi * 10 * dt)
 q_val = 0.01
 R_val = 1.44     
 
-# High-speed Kalman Filter Core Loop executed via LLVM Compiler (C-level performance)
-@njit(float64[:](float64[:], float64, float64, float64, float64), cache=True, fastmath=True)
+# Static typed, hardware-pipelined Kalman loop via LLVM Machine Compilation
+@njit('f8[:](f8[:], f8, f8, f8, f8)', cache=True) 
 def execute_safe_kalman(y_filt, cos_t, sin_t, q, R):
-    N_samples = y_filt.shape[0]
+    N_samples = len(y_filt)
     
     x0, x1 = 0.0, 0.0
     p00, p01, p11 = 1.0, 0.0, 1.0  
@@ -64,44 +65,45 @@ def execute_safe_kalman(y_filt, cos_t, sin_t, q, R):
     cos_sin = cos_t * sin_t
     
     for i in range(N_samples):
-        # 1. State Prediction
+        # 1. Prediction (State & Covariance)
         x0_m = cos_t * x0 - sin_t * x1
         x1_m = sin_t * x0 + cos_t * x1
         
-        # 2. Covariance Prediction (A * P * A^T + Q)
         p00_m = cos_sq * p00 - two_cos_sin * p01 + sin_sq * p11 + q
         p01_m = cos_sin * (p00 - p11) + cos_sq_minus_sin_sq * p01
         p11_m = sin_sq * p00 + two_cos_sin * p01 + cos_sq * p11 + q
         
-        # 3. Kalman Gain Calculation with division mitigation & zero-division filter
+        # 2. Kalman Gain with division mitigation & zero-division filter
         innov_cov = p00_m + R
         innov_out = innov_cov if innov_cov > 1e-12 else 1e-12 
-        
         inv_innov = 1.0 / innov_out
         k0 = p00_m * inv_innov
         k1 = p01_m * inv_innov  
         
-        # 4. State Update
+        # 3. Update (State Variables)
         v = y_filt[i] - x0_m
         x0 = x0_m + k0 * v
         x1 = x1_m + k1 * v
         
-        # 5. Covariance Update & Numerical Boundary Enforcement
-        p00_new = p00_m - k0 * p00_m
-        p01_new = p01_m - k0 * p01_m
-        p11_new = p11_m - k1 * p01_m
+        # 4. Covariance Update: Analytical Expansion of Joseph Form (Minimized Arithmetic)
+        imk0 = 1.0 - k0
+        k0_sq = k0 * k0
+        k1_sq = k1 * k1
+        k0_k1 = k0 * k1
         
-        # Floor boundaries mapping
+        p00_new = imk0 * imk0 * p00_m + k0_sq * R
+        p01_new = imk0 * (p01_m - k1 * p00_m) + k0_k1 * R
+        p11_new = p11_m - 2.0 * k1 * imk0 * p01_m + k1_sq * p00_m + k1_sq * R
+        
+        # 5. Floor boundaries mapping & Cauchy-Schwarz hardware boundary constraints
         p00 = p00_new if p00_new > 1e-14 else 1e-14
-        p11 = p11_m if p11_new > 1e-14 else 1e-14
+        p11 = p11_new if p11_new > 1e-14 else 1e-14
         
-        # Cauchy-Schwarz upper-bound check (Prevents matrix divergence)
-        p01_sq = p01_new * p01_new
-        max_p01_sq = p00 * p11
-        
-        if p01_sq > max_p01_sq:
-            limit = np.sqrt(max_p01_sq)
-            p01 = limit if p01_new > 0 else -limit
+        max_p01 = math.sqrt(p00 * p11)
+        if p01_new > max_p01:
+            p01 = max_p01
+        elif p01_new < -max_p01:
+            p01 = -max_p01
         else:
             p01 = p01_new
         
