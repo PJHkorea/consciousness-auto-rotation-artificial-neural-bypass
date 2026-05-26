@@ -1,11 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import iirnotch, lfilter
-from numba import njit
+from numba import njit, float64
 
-# -------------------------------------------------------------
-# 1. Environment & Simulation Variables
-# -------------------------------------------------------------
+# 1. Environment & Simulation Variables (10s, 250Hz sampling rate)
 np.random.seed(42)
 fs = 250
 t = np.arange(0, 10, 1/fs)
@@ -22,11 +20,10 @@ N_bio = np.random.normal(0, 1.2, N) + 0.5 * np.sin(2 * np.pi * 1.5 * t)
 Y_raw = X_brain + I_stim_distorted + N_bio
 
 # -------------------------------------------------------------
-# 2. ARCF Computational Control Loop (Production-Ready Edition)
+# ARCF Computational Control Loop (Production-Ready Edition)
 # -------------------------------------------------------------
 
-# Phase 1: Real-time Signal Conditioning (Notch Filter)
-# 정답을 미리 빼는 '데이터 누설'을 막기 위해 60Hz 좁은 대역 차단 필터를 사용합니다.
+# Phase 1: Real-time Signal Conditioning (Linear Impedance Cancellation via Notch Filter)
 b_notch, a_notch = iirnotch(w0=60.0, Q=30.0, fs=fs)
 Y_ccl = lfilter(b_notch, a_notch, Y_raw)
 
@@ -42,59 +39,79 @@ choicelist = [
 W_gate = np.select(condlist, choicelist)
 Y_filtered = Y_ccl * W_gate
 
-# Phase 3: State-Space Minimal Variance Estimation (Numba & Math Corrected)
+# Phase 3: State-Space Minimal Variance Estimation (Optimized Scalar Expansion)
 dt = 1/fs
 cos_t = np.cos(2 * np.pi * 10 * dt)
 sin_t = np.sin(2 * np.pi * 10 * dt)
 q_val = 0.01
 R_val = 1.44     
 
-# 고속 연산과 대칭성이 보장된 칼만 필터 코어 루프
-@njit
-def execute_safe_kalman(N_samples, y_filt, cos_t, sin_t, q, R):
+# High-speed Kalman Filter Core Loop executed via LLVM Compiler (C-level performance)
+@njit(float64[:](float64[:], float64, float64, float64, float64), cache=True, fastmath=True)
+def execute_safe_kalman(y_filt, cos_t, sin_t, q, R):
+    N_samples = y_filt.shape[0]
+    
     x0, x1 = 0.0, 0.0
-    p00, p01, p11 = 1.0, 0.0, 1.0  # 초기 공분산 행렬
-    energy_out = np.zeros(N_samples)
+    p00, p01, p11 = 1.0, 0.0, 1.0  
+    
+    energy_out = np.empty(N_samples, dtype=np.float64)
+    
+    # Constant pre-computing to eliminate arithmetic overhead inside the loop
+    cos_sq = cos_t * cos_t
+    sin_sq = sin_t * sin_t
+    two_cos_sin = 2.0 * cos_t * sin_t
+    cos_sq_minus_sin_sq = cos_sq - sin_sq
+    cos_sin = cos_t * sin_t
     
     for i in range(N_samples):
-        # 1. State Prediction (A * x)
+        # 1. State Prediction
         x0_m = cos_t * x0 - sin_t * x1
         x1_m = sin_t * x0 + cos_t * x1
         
         # 2. Covariance Prediction (A * P * A^T + Q)
-        ap00 = cos_t * p00 - sin_t * p01
-        ap01 = cos_t * p01 - sin_t * p11
-        ap10 = sin_t * p00 + cos_t * p01
-        ap11 = sin_t * p01 + cos_t * p11
+        p00_m = cos_sq * p00 - two_cos_sin * p01 + sin_sq * p11 + q
+        p01_m = cos_sin * (p00 - p11) + cos_sq_minus_sin_sq * p01
+        p11_m = sin_sq * p00 + two_cos_sin * p01 + cos_sq * p11 + q
         
-        p00_m = ap00 * cos_t - ap01 * sin_t + q
-        p01_m = ap00 * sin_t + ap01 * cos_t
-        p11_m = ap10 * sin_t + ap11 * cos_t + q
-        
-        # 3. Kalman Gain (H = [1, 0])
+        # 3. Kalman Gain Calculation with division mitigation & zero-division filter
         innov_cov = p00_m + R
-        k0 = p00_m / innov_cov
-        k1 = p01_m / innov_cov
+        innov_out = innov_cov if innov_cov > 1e-12 else 1e-12 
+        
+        inv_innov = 1.0 / innov_out
+        k0 = p00_m * inv_innov
+        k1 = p01_m * inv_innov  
         
         # 4. State Update
         v = y_filt[i] - x0_m
         x0 = x0_m + k0 * v
         x1 = x1_m + k1 * v
         
-        # 5. Covariance Update (I - KH) * P_minus 수식 엄격 교정
-        p00_new = (1.0 - k0) * p00_m
-        p01_new = (1.0 - k0) * p01_m  # 대칭성 수치 안정성 확보
+        # 5. Covariance Update & Numerical Boundary Enforcement
+        p00_new = p00_m - k0 * p00_m
+        p01_new = p01_m - k0 * p01_m
         p11_new = p11_m - k1 * p01_m
         
-        p00, p01, p11 = p00_new, p01_new, p11_new
+        # Floor boundaries mapping
+        p00 = p00_new if p00_new > 1e-14 else 1e-14
+        p11 = p11_m if p11_new > 1e-14 else 1e-14
         
-        # 6. Signal Power Mapping
-        energy_out[i] = x0*x0 + x1*x1
+        # Cauchy-Schwarz upper-bound check (Prevents matrix divergence)
+        p01_sq = p01_new * p01_new
+        max_p01_sq = p00 * p11
+        
+        if p01_sq > max_p01_sq:
+            limit = np.sqrt(max_p01_sq)
+            p01 = limit if p01_new > 0 else -limit
+        else:
+            p01 = p01_new
+        
+        # 6. Signal Power Mapping (Root-Mean-Square Energy)
+        energy_out[i] = x0 * x0 + x1 * x1
         
     return energy_out
 
-# 컴파일 및 초고속 실행
-X_intent_energy = execute_safe_kalman(N, Y_filtered, cos_t, sin_t, q_val, R_val)
+# JIT Execution
+X_intent_energy = execute_safe_kalman(Y_filtered, cos_t, sin_t, q_val, R_val)
 
 # Phase 4: Non-linear Mapping & Actuator Decision Function
 theta = 0.4  
@@ -105,18 +122,18 @@ print(f"Simulation completed successfully.")
 print(f"Average Activation Probability (4s-7s): {np.mean(P_state[active_mask]):.4f}")
 
 # -------------------------------------------------------------
-# 3. Visualization & Result Verification Plotting
+# Visualization & Result Verification Plotting
 # -------------------------------------------------------------
 fig, axs = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
 
-# Graph 1: Raw Contaminated Input vs. Hidden Target Signal
+# Graph 1
 axs[0].plot(t, Y_raw, color='gray', alpha=0.4, label='Y_raw(t) (Noise Contaminated Input)')
 axs[0].plot(t, X_brain, color='green', linewidth=1.8, label='Target X_brain(t) (10Hz SMR)')
 axs[0].set_title('Phase 1 & 2: Signal Contamination Profiling', fontsize=11, fontweight='bold')
 axs[0].legend(loc='upper right')
 axs[0].grid(True, alpha=0.3)
 
-# Graph 2: Gated Signal Spectrum & Dynamic Resonance Weights
+# Graph 2
 ax2_twin = axs[1].twinx()
 axs[1].plot(t, Y_filtered, color='blue', alpha=0.6, label='Y_filtered(t) (Gated Output)')
 ax2_twin.plot(t, W_gate, color='orange', linestyle='--', linewidth=1.5, label='W_gate(t) (DMN Resonance)')
@@ -125,14 +142,14 @@ axs[1].legend(loc='upper left')
 ax2_twin.legend(loc='upper right')
 axs[1].grid(True, alpha=0.3)
 
-# Graph 3: Kalman State Tracking Energy Validation
+# Graph 3
 axs[2].plot(t, X_intent_energy, color='purple', linewidth=1.8, label='||X_intent(t)||^2 (State Vector Power)')
 axs[2].axhline(y=theta, color='red', linestyle=':', linewidth=1.5, label='Baseline Energy Threshold (theta)')
 axs[2].set_title('Phase 3: State-Space Minimal Variance Power Tracking', fontsize=11, fontweight='bold')
 axs[2].legend(loc='upper right')
 axs[2].grid(True, alpha=0.3)
 
-# Graph 4: Final Trigger Probability & Actuator Controller Window
+# Graph 4
 axs[3].plot(t, P_state, color='crimson', linewidth=2, label='P_state(t) (Transition Probability)')
 axs[3].axhline(y=0.75, color='black', linestyle='--', linewidth=1.5, label='Actuator Trigger Threshold (0.75)')
 trigger_active = P_state > 0.75
