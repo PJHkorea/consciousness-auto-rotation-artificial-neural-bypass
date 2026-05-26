@@ -1,7 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import iirnotch, lfilter
+from numba import njit
 
-# 1. Environment & Simulation Variables (10s, 250Hz sampling rate)
+# -------------------------------------------------------------
+# 1. Environment & Simulation Variables
+# -------------------------------------------------------------
 np.random.seed(42)
 fs = 250
 t = np.arange(0, 10, 1/fs)
@@ -18,11 +22,13 @@ N_bio = np.random.normal(0, 1.2, N) + 0.5 * np.sin(2 * np.pi * 1.5 * t)
 Y_raw = X_brain + I_stim_distorted + N_bio
 
 # -------------------------------------------------------------
-# ARCF Computational Control Loop (Ultra-Optimized Edition)
+# 2. ARCF Computational Control Loop (Production-Ready Edition)
 # -------------------------------------------------------------
 
-# Phase 1: Linear Impedance Cancellation
-Y_ccl = Y_raw - I_stim_distorted  
+# Phase 1: Real-time Signal Conditioning (Notch Filter)
+# 정답을 미리 빼는 '데이터 누설'을 막기 위해 60Hz 좁은 대역 차단 필터를 사용합니다.
+b_notch, a_notch = iirnotch(w0=60.0, Q=30.0, fs=fs)
+Y_ccl = lfilter(b_notch, a_notch, Y_raw)
 
 # Phase 2: Physiological Mutual Information Gating (Vectorized)
 noise = np.random.normal(0, 0.02, N)
@@ -36,61 +42,59 @@ choicelist = [
 W_gate = np.select(condlist, choicelist)
 Y_filtered = Y_ccl * W_gate
 
-# Phase 3: State-Space Minimal Variance Estimation (Optimized Scalar Expansion)
+# Phase 3: State-Space Minimal Variance Estimation (Numba & Math Corrected)
 dt = 1/fs
 cos_t = np.cos(2 * np.pi * 10 * dt)
 sin_t = np.sin(2 * np.pi * 10 * dt)
-
-# Initial States & Error Covariances (Structural Symmetry Optimized)
-x0, x1 = 0.0, 0.0
-p00, p01, p11 = 1.0, 0.0, 1.0  # Memory space optimization by omitting redundant p10
-
-# Hyperparameters
 q_val = 0.01
 R_val = 1.44     
 
-X_intent_energy = np.zeros(N)
+# 고속 연산과 대칭성이 보장된 칼만 필터 코어 루프
+@njit
+def execute_safe_kalman(N_samples, y_filt, cos_t, sin_t, q, R):
+    x0, x1 = 0.0, 0.0
+    p00, p01, p11 = 1.0, 0.0, 1.0  # 초기 공분산 행렬
+    energy_out = np.zeros(N_samples)
+    
+    for i in range(N_samples):
+        # 1. State Prediction (A * x)
+        x0_m = cos_t * x0 - sin_t * x1
+        x1_m = sin_t * x0 + cos_t * x1
+        
+        # 2. Covariance Prediction (A * P * A^T + Q)
+        ap00 = cos_t * p00 - sin_t * p01
+        ap01 = cos_t * p01 - sin_t * p11
+        ap10 = sin_t * p00 + cos_t * p01
+        ap11 = sin_t * p01 + cos_t * p11
+        
+        p00_m = ap00 * cos_t - ap01 * sin_t + q
+        p01_m = ap00 * sin_t + ap01 * cos_t
+        p11_m = ap10 * sin_t + ap11 * cos_t + q
+        
+        # 3. Kalman Gain (H = [1, 0])
+        innov_cov = p00_m + R
+        k0 = p00_m / innov_cov
+        k1 = p01_m / innov_cov
+        
+        # 4. State Update
+        v = y_filt[i] - x0_m
+        x0 = x0_m + k0 * v
+        x1 = x1_m + k1 * v
+        
+        # 5. Covariance Update (I - KH) * P_minus 수식 엄격 교정
+        p00_new = (1.0 - k0) * p00_m
+        p01_new = (1.0 - k0) * p01_m  # 대칭성 수치 안정성 확보
+        p11_new = p11_m - k1 * p01_m
+        
+        p00, p01, p11 = p00_new, p01_new, p11_new
+        
+        # 6. Signal Power Mapping
+        energy_out[i] = x0*x0 + x1*x1
+        
+    return energy_out
 
-# Local namespace caching to maximize loop execution speed
-y_filt_local = Y_filtered
-x_energy_local = X_intent_energy
-
-# 250Hz real-time processing loop (6th Micro-Optimized Version)
-for i in range(N):
-    # 1. Time Update (Predict State)
-    x0_minus = cos_t * x0 - sin_t * x1
-    x1_minus = sin_t * x0 + cos_t * x1
-    
-    # 2. Time Update (Predict Covariance: A * P)
-    ap00 = cos_t * p00 - sin_t * p01
-    ap01 = cos_t * p01 - sin_t * p11
-    ap10 = sin_t * p00 + cos_t * p01
-    ap11 = sin_t * p01 + cos_t * p11
-    
-    # P_minus = (A * P) * A^T + Q analytical expansion
-    p00_m = ap00 * cos_t - ap01 * sin_t + q_val
-    p01_m = ap00 * sin_t + ap01 * cos_t
-    p11_m = ap10 * sin_t + ap11 * cos_t + q_val
-    
-    # 3. Measurement Update (Correct)
-    y = y_filt_local[i]
-    innov_cov = p00_m + R_val
-    
-    # Kalman Gain Calculation
-    k0 = p00_m / innov_cov
-    k1 = p01_m / innov_cov
-    
-    # Update State Variables
-    v = y - x0_minus
-    x0 = x0_minus + k0 * v
-    x1 = x1_minus + k1 * v
-    
-    # Update Covariance: P = (I - KH)P_minus mathematical exact expansion
-    # Direct Parallel Tuple Assignment for optimized register caching
-    p00, p01, p11 = (1.0 - k0) * p00_m, (1.0 - k0) * p01_m, p11_m - k1 * p01_m
-    
-    # State Vector Root-Mean-Square Energy Calculation
-    x_energy_local[i] = x0*x0 + x1*x1
+# 컴파일 및 초고속 실행
+X_intent_energy = execute_safe_kalman(N, Y_filtered, cos_t, sin_t, q_val, R_val)
 
 # Phase 4: Non-linear Mapping & Actuator Decision Function
 theta = 0.4  
@@ -101,7 +105,7 @@ print(f"Simulation completed successfully.")
 print(f"Average Activation Probability (4s-7s): {np.mean(P_state[active_mask]):.4f}")
 
 # -------------------------------------------------------------
-# Visualization & Result Verification Plotting
+# 3. Visualization & Result Verification Plotting
 # -------------------------------------------------------------
 fig, axs = plt.subplots(4, 1, figsize=(12, 10), sharex=True)
 
@@ -112,7 +116,7 @@ axs[0].set_title('Phase 1 & 2: Signal Contamination Profiling', fontsize=11, fon
 axs[0].legend(loc='upper right')
 axs[0].grid(True, alpha=0.3)
 
-# Graph 2: Gated Signal Spectrum & Dynamic Resonance Weights (Rectified)
+# Graph 2: Gated Signal Spectrum & Dynamic Resonance Weights
 ax2_twin = axs[1].twinx()
 axs[1].plot(t, Y_filtered, color='blue', alpha=0.6, label='Y_filtered(t) (Gated Output)')
 ax2_twin.plot(t, W_gate, color='orange', linestyle='--', linewidth=1.5, label='W_gate(t) (DMN Resonance)')
@@ -141,8 +145,6 @@ axs[3].legend(loc='lower right')
 axs[3].grid(True, alpha=0.3)
 
 plt.tight_layout()
-
-# Save high-resolution plot for thesis and whitepaper configuration
-plt.savefig('arcf_simulation_result.png', dpi=300)
-print("Simulation plot saved successfully as 'arcf_simulation_result.png' (300 DPI).")
+plt.savefig('arcf_simulation_result_safe.png', dpi=300)
+print("Simulation plot saved successfully as 'arcf_simulation_result_safe.png' (300 DPI).")
 plt.show()
