@@ -159,9 +159,9 @@ This script contains the zero-copy real-time streaming core, Numba LLVM compiled
 # Optimized via explicit scalar registers and Joseph Form Symmetrization
 for i in range(N_samples):
     # Phase 1: Inline IIR Notch Filtering
-    y_notch = b[0] * x_in + v0
-    v0 = b[1] * x_in - a[1] * y_notch + v1
-    v1 = b[2] * x_in - a[2] * y_notch
+    y_notch = b * x_in + v0
+    v0 = b * x_in - a * y_notch + v1
+    v1 = b * x_in - a * y_notch
     
     # Phase 2: Real-time Moving-Average Information Gating
     inst_energy = y_notch * y_notch
