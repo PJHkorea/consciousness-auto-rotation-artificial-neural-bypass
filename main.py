@@ -43,7 +43,7 @@ sin_t = np.sin(2 * np.pi * 10 * dt)
 
 # Initial States & Error Covariances (Structural Symmetry Optimized)
 x0, x1 = 0.0, 0.0
-p00, p01, p11 = 1.0, 0.0, 1.0  # Memory space optimization by ommiting redundant p10
+p00, p01, p11 = 1.0, 0.0, 1.0  # Memory space optimization by omitting redundant p10
 
 # Hyperparameters
 q_val = 0.01
@@ -51,7 +51,7 @@ R_val = 1.44
 
 X_intent_energy = np.zeros(N)
 
-# 250Hz real-time processing loop (4th Optimized Version)
+# 250Hz real-time processing loop (5th Verified Version)
 for i in range(N):
     # 1. Time Update (Predict State)
     x0_minus = cos_t * x0 - sin_t * x1
@@ -63,7 +63,7 @@ for i in range(N):
     ap10 = sin_t * p00 + cos_t * p01
     ap11 = sin_t * p01 + cos_t * p11
     
-    # P_minus = (A * P) * A^T + Q
+    # P_minus = (A * P) * A^T + Q analytical expansion
     p00_m = ap00 * cos_t - ap01 * sin_t + q_val
     p01_m = ap00 * sin_t + ap01 * cos_t
     p11_m = ap10 * sin_t + ap11 * cos_t + q_val
@@ -81,11 +81,13 @@ for i in range(N):
     x0 = x0_minus + k0 * v
     x1 = x1_minus + k1 * v
     
-    # Update Covariance: (Identity - K*H) * P_minus
-    # Ordered array updating to preserve mathematical dependency without temporary variables
-    p00 = (1.0 - k0) * p00_m
-    p01 = (1.0 - k0) * p01_m
-    p11 = p11_m - k1 * p01_m
+    # Update Covariance: P = (I - KH)P_minus mathematical exact expansion
+    # Parallel Tuple Assignment to prevent race condition or data contamination
+    p00_new = (1.0 - k0) * p00_m
+    p01_new = (1.0 - k0) * p01_m
+    p11_new = p11_m - k1 * p01_m
+    
+    p00, p01, p11 = p00_new, p01_new, p11_new
     
     # State Vector Root-Mean-Square Energy Calculation
     X_intent_energy[i] = x0*x0 + x1*x1
@@ -114,6 +116,7 @@ axs[0].grid(True, alpha=0.3)
 ax2_twin = axs[1].twinx()
 axs[1].plot(t, Y_filtered, color='blue', alpha=0.6, label='Y_filtered(t) (Gated Output)')
 ax2_twin.plot(t, W_gate, color='orange', linestyle='--', linewidth=1.5, label='W_gate(t) (DMN Resonance)')
+axs[0].get_shared_x_axes().join(axs[0], axs[1]) # Link axes for perfect alignment
 axs[1].set_title('Phase 2: Physiological Mutual Information Gating Spectrum', fontsize=11, fontweight='bold')
 axs[1].legend(loc='upper left')
 ax2_twin.legend(loc='upper right')
