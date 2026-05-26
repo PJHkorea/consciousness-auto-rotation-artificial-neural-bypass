@@ -108,6 +108,7 @@ $$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
 The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm (\(X_{\text{brain}}\)) hidden in the filtered potential.
 
 #### A. Time Update (Predictive Step)
+
 \[\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}\]
 
 \[p_{00\_m} = \cos^2\theta \cdot p_{00} + 2\cos\theta\sin\theta \cdot p_{01} + \sin^2\theta \cdot p_{11} + Q\]
@@ -117,7 +118,7 @@ The discrete state-space framework models the system to track the microscopic 10
 \[p_{11\_m} = \sin^2\theta \cdot p_{00} - 2\cos\theta\sin\theta \cdot p_{01} + \cos^2\theta \cdot p_{11} + Q\]
 
 #### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
-To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the Joseph Form Equation (\(M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}\)):
+To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the **Joseph Form Equation** (\(M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}\)):
 
 \[m_0 = 1.0 - k_0\]
 
