@@ -1,7 +1,7 @@
 # Artificial Neural Bypass for Open-Loop Disorders of Consciousness (DoC)
 > **Theory of Closed-loop Neural Resonance for Consciousness Auto-Rotation**
 
-This repository contains the official framework, mathematical formulation, and a production-ready, ultra-optimized, and numerically stable real-time Python infrastructure of the **Autobiographical Resonance-based Closed-loop Filter (ARCF)**. This system functions as an artificial neural bypass to restore broken information loops in patients with Unresponsive Wakefulness Syndrome (UWS) or Minimum Conscious State (MCS).
+This repository contains the official framework, mathematical formulation, and a high-performance, production-ready real-time implementation of the **Autobiographical Resonance-based Closed-loop Filter (ARCF)**. This system functions as an artificial neural bypass to restore functional information loops in patients with Unresponsive Wakefulness Syndrome (UWS) or Minimum Conscious State (MCS).
 
 ---
 
@@ -19,8 +19,8 @@ This project is fully open-sourced under the **GNU General Public License v3 (GP
 ## 🧠 Core Philosophy: The Two-Layer Consciousness Model
 
 Current neuromodulation paradigms often treat disorders of consciousness as a generalized cellular degradation. In contrast, this framework models human consciousness through **Two Distinct Layers**:
-1. **Layer 1 (Subcortical/Thalamic System)**: The baseline generator supplying arousal energy.
-2. **Layer 2 (Cortical Lattice)**: The cognitive processing unit rendering the internal screen of awareness.
+1. **Layer 1 (Subcortical/Thalamic System)**: The baseline generator supplying arousal energy (Arousal Subsystem).
+2. **Layer 2 (Cortical Lattice)**: The cognitive processing unit rendering the internal screen of awareness (Cognitive Lattice).
 
 Patients in a vegetative state (UWS) are defined as being in an **Open-Loop State**, where the informational transit between these two layers is severed. This project establishes an **Artificial Neural Bypass (External Feedback Loop)** utilizing non-invasive technology to force the brain's internal network back into a self-sustaining cycle—**Consciousness Auto-Rotation**.
 
@@ -85,28 +85,27 @@ graph TD
 
 ## 📐 Technical Specification (Mathematical Formulation)
 
-The ARCF features an optimized two-state model augmented with a non-linear informational binder. The core processing pipeline executes via a static-typed Numba JIT environment, providing deterministic real-time performance and total immunity against numerical covariance collapse.
+This section provides the definitive mathematical formulation for the Autobiographical Resonance-based Closed-loop Filter (ARCF).
 
 ### 1. Phase 1: Real-Time Signal Conditioning
-Primary elimination of the 60 Hz power-line artifact from the raw cranial biopotential (\(Y_{\text{raw}}\)) is executed using an inline digital Infinite Impulse Response (IIR) notch filter operating in Direct Free Form II structure to preserve hidden cognitive potentials (\(Y_{\text{ccl}}\)):
+Primary elimination of the 60 Hz power-line artifact from the raw cranial biopotential ($Y_{\text{raw}}$) is executed using an inline digital Infinite Impulse Response (IIR) notch filter operating in Direct Form II structure to preserve hidden cognitive potentials ($Y_{\text{ccl}}$):
 
-\[Y_{\text{ccl}}[k] = \mathcal{L}_{\text{notch}}(Y_{\text{raw}}[k])\]
+$$Y_{\text{ccl}}[k] = \mathcal{L}_{\text{notch}}(Y_{\text{raw}}[k])$$
 
-An exact analytical feed-forward compensation for the frequency-dependent phase delay (\(\phi_{\text{delay}}\)) at the tracking target frequency (10 Hz) is integrated directly into the digital domain angular rotation calculation:
+An exact analytical feed-forward compensation for the frequency-dependent phase delay ($\phi_{\text{delay}}$) at the tracking target frequency (10 Hz) is integrated directly into the digital domain angular rotation calculation:
 
-\[\theta = 2\pi f \Delta t + \phi_{\text{delay}}\]
+$$\theta = 2\pi f \Delta t + \phi_{\text{delay}}$$
 
 ### 2. Phase 2: Physiological Mutual Information Gating
-To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight (\(W_{\text{gate}}\)) driven by a continuous sigmoid power synchronization profile:
+To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight ($W_{\text{gate}}$) driven by a continuous sigmoid power synchronization profile:
 
-\[E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{notch}}[k]\right)^2\]
+$$E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{notch}}[k]\right)^2$$
 
-\[W_{\text{gate}}[k] = \max\left(0.1, \,\, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)\]
+$$W_{\text{gate}}[k] = \max\left(0.1, \,\, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)$$
 
-\[Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]\]
-
+$$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
 ### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
-The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm (\(X_{\text{brain}}\)) hidden in the filtered potential. 
+The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm (\(X_{\text{brain}}\)) hidden in the filtered potential.
 
 #### A. Time Update (Predictive Step)
 \[\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}\]
@@ -146,23 +145,46 @@ The state vector's root-mean-square energy maps to the probability space (\(P_{\
 
 ---
 
-## 💻 Production-Ready Infrastructure Implementation
+## 💻 Verified Production Implementation (Python & Network Fused)
 
-This project contains two core architectural modules optimized for high-throughput deployment:
-1. `realtime_bypass_core.py`: Register-optimized, JIT-compiled mathematical kernel executing the ARCF loop.
-2. `realtime_bypass_network.py`: A high-speed TCP/IP networking hub designed with zero-copy stream parsing and real-time fault-tolerance guards to control mechanical hardware.
-
-### Core Mathematical & Signal Processing Kernel
+This script contains the zero-copy real-time streaming core, Numba LLVM compiled scalar Joseph Form tracking loop, and integrated network latency accumulation defenses. Please check the `realtime_bypass.py` file in this repository for the fully production-ready execution script.
 
 ```python
-import numpy as np
-import math
-from numba import njit
+# Real-Time Causal Core Snippet (From realtime_bypass.py)
+# Optimized via explicit scalar registers and Joseph Form Symmetrization
+for i in range(N_samples):
+    # Phase 1: Inline IIR Notch Filtering
+    y_notch = b[0] * x_in + v0
+    v0 = b[1] * x_in - a[1] * y_notch + v1
+    v1 = b[2] * x_in - a[2] * y_notch
+    
+    # Phase 2: Real-time Moving-Average Information Gating
+    inst_energy = y_notch * y_notch
+    running_energy = (1.0 - ema_alpha) * running_energy + ema_alpha * inst_energy
+    w_gate = 0.1 + (0.9 / (1.0 + math.exp(-2.5 * (running_energy - 0.8))))
+    
+    # Phase 3: Analytical Predictive & Measurement Joseph Form Step
+    x0_m = cos_t * x0 + sin_t * x1
+    x1_m = -sin_t * x0 + cos_t * x1
+    
+    p00_m = cos_sq * p00 + two_cos_sin * p01 + sin_sq * p11 + q
+    p01_m = -cos_sin * p00 + cos_sq_minus_sin_sq * p01 + cos_sin * p11
+    p11_m = sin_sq * p00 - two_cos_sin * p01 + cos_sq * p11 + q
+    
+    # Parallel Tuple Assignment to eliminate Race Conditions
+    p00, p01, p11 = p00_new, p01_guard, p11_guard
+```
 
-# Global Configuration Constants
-EPSILON_INNOV = 1e-9      # Innovation covariance lower bound
-EPSILON_GUARD = 1e-14      # State covariance minimum guard
-EPSILON_PROD = 1e-28       # Cauchy-Schwarz product limit
-GATE_SCALE = -2.5          # Energy gating sensitivity
-GATE_OFFSET = 0.8          # Energy gating threshold center
-LAMBDA_STATE = 7.0         # Sigmoid state transition slope
+---
+
+## 🤝 How to Contribute & Collaborate
+
+This project is a global endeavor to democratize neurorehabilitation technologies. We explicitly welcome:
+1. **Clinical Research Institutions**: Seeking to implement this protocol in pilot clinical trials.
+2. **DSP / Embedded Engineers**: Optimizing and porting the core scalar arithmetic loops directly into STM32 or FPGA architectures.
+3. **Robotics Researchers**: Adapting the digital TCP/IP control stream interface into proprietary exoskeleton actuator protocols.
+
+To protect the ecosystem from predatory corporate enclosures, all pull requests, feature branches, and software extensions merged into this pipeline will legally inherit the **GNU GPL v3 copyleft mandate**.
+
+---
+*Developed under the foundational architecture of the Consciousness Auto-Rotation Theory.*
