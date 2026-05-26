@@ -48,7 +48,7 @@ graph TD
     %% 실시간 신호처리 및 연산 레이어
     subgraph COMP_LOOP [ARCF Core Computational Loop]
         Phase1["Phase 1: Linear Impedance Cancellation <br> <i>High-Q IIR Notch Filter Line Elimination</i>"]:::process
-        Phase2["Phase 2: Physiological Mutual Information Gating <br> <i>Fused Numba JIT (nogil=True, fastmath=True)</i>"]:::process
+        Phase2["Phase 2: Physiological Mutual Information Gating <br> <i>Vectorized np.select C-Engine Speed</i>"]:::process
         Phase3["Phase 3: State-Space Minimal Variance Estimation <br> <i>Statically Allocated Scalar Joseph Form Loop</i>"]:::process
     end
 
@@ -111,7 +111,9 @@ The discrete state-space framework models the system to track the microscopic 10
 \[\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}\]
 
 \[p_{00\_m} = \cos^2\theta \cdot p_{00} + 2\cos\theta\sin\theta \cdot p_{01} + \sin^2\theta \cdot p_{11} + Q\]
+
 \[p_{01\_m} = -\cos\theta\sin\theta \cdot p_{00} + (\cos^2\theta - \sin^2\theta) \cdot p_{01} + \cos\theta\sin\theta \cdot p_{11}\]
+
 \[p_{11\_m} = \sin^2\theta \cdot p_{00} - 2\cos\theta\sin\theta \cdot p_{01} + \cos^2\theta \cdot p_{11} + Q\]
 
 #### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
@@ -120,7 +122,9 @@ To enforce absolute positive-definiteness under floating-point round-off errors 
 \[m_0 = 1.0 - k_0\]
 
 \[p_{00\_new} = (m_0^2 \cdot p_{00\_m}) + (k_0^2 \cdot R)\]
+
 \[p_{01\_new} = (-k_1 \cdot m_0 \cdot p_{00\_m}) + (m_0 \cdot p_{01\_m}) + (k_0 \cdot k_1 \cdot R)\]
+
 \[p_{11\_new} = (k_1^2 \cdot p_{00\_m}) - (2.0 \cdot k_1 \cdot p_{01\_m}) + p_{11\_m} + (k_1^2 \cdot R)\]
 
 #### C. Sub-zero Divergence Guard & Boundary Mapping
