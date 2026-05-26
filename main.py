@@ -51,7 +51,11 @@ R_val = 1.44
 
 X_intent_energy = np.zeros(N)
 
-# 250Hz real-time processing loop (5th Verified Version)
+# Local namespace caching to maximize loop execution speed
+y_filt_local = Y_filtered
+x_energy_local = X_intent_energy
+
+# 250Hz real-time processing loop (6th Micro-Optimized Version)
 for i in range(N):
     # 1. Time Update (Predict State)
     x0_minus = cos_t * x0 - sin_t * x1
@@ -69,7 +73,7 @@ for i in range(N):
     p11_m = ap10 * sin_t + ap11 * cos_t + q_val
     
     # 3. Measurement Update (Correct)
-    y = Y_filtered[i]
+    y = y_filt_local[i]
     innov_cov = p00_m + R_val
     
     # Kalman Gain Calculation
@@ -82,15 +86,11 @@ for i in range(N):
     x1 = x1_minus + k1 * v
     
     # Update Covariance: P = (I - KH)P_minus mathematical exact expansion
-    # Parallel Tuple Assignment to prevent race condition or data contamination
-    p00_new = (1.0 - k0) * p00_m
-    p01_new = (1.0 - k0) * p01_m
-    p11_new = p11_m - k1 * p01_m
-    
-    p00, p01, p11 = p00_new, p01_new, p11_new
+    # Direct Parallel Tuple Assignment for optimized register caching
+    p00, p01, p11 = (1.0 - k0) * p00_m, (1.0 - k0) * p01_m, p11_m - k1 * p01_m
     
     # State Vector Root-Mean-Square Energy Calculation
-    X_intent_energy[i] = x0*x0 + x1*x1
+    x_energy_local[i] = x0*x0 + x1*x1
 
 # Phase 4: Non-linear Mapping & Actuator Decision Function
 theta = 0.4  
@@ -112,11 +112,10 @@ axs[0].set_title('Phase 1 & 2: Signal Contamination Profiling', fontsize=11, fon
 axs[0].legend(loc='upper right')
 axs[0].grid(True, alpha=0.3)
 
-# Graph 2: Gated Signal Spectrum & Dynamic Resonance Weights
+# Graph 2: Gated Signal Spectrum & Dynamic Resonance Weights (Rectified)
 ax2_twin = axs[1].twinx()
 axs[1].plot(t, Y_filtered, color='blue', alpha=0.6, label='Y_filtered(t) (Gated Output)')
 ax2_twin.plot(t, W_gate, color='orange', linestyle='--', linewidth=1.5, label='W_gate(t) (DMN Resonance)')
-axs[0].get_shared_x_axes().join(axs[0], axs[1]) # Link axes for perfect alignment
 axs[1].set_title('Phase 2: Physiological Mutual Information Gating Spectrum', fontsize=11, fontweight='bold')
 axs[1].legend(loc='upper left')
 ax2_twin.legend(loc='upper right')
