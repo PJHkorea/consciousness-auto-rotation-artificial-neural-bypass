@@ -138,7 +138,7 @@ The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cros
 
 \[p_{\text{prod}} = p_{00} \cdot p_{11}\]
 
-\[\vert{}p_{01\_aligned}\vert{} \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}\]
+\[\lvert p_{01\_aligned} \rvert \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}\]
 
 ### 4. Phase 4: Actuator Trigger Mapping
 The state vector's root-mean-square energy maps to the probability space (\(P_{\text{state}}\)) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
