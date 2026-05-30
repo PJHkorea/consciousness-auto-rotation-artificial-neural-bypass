@@ -151,11 +151,12 @@ If any numeric anomaly ($NaN$ or Overflow) is detected, or state variables breac
 $$ \text{If Anomaly Detected} \Longrightarrow \begin{cases} \mathbf{x}_{k\vert{}k} = \mathbf{x}_{k\vert{}k-1} \\ \mathbf{P}_{k\vert{}k} = \mathbf{I} \end{cases} $$
 
 ### 4. Phase 4: Actuator Trigger Mapping
-The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2$) maps to a zero-centered symmetric probability space ($P_{\text{raw}}$) via a scaled logistic activation to manage actuator dead-zones, which is then dynamically normalized against the gating threshold ($\theta_{\text{gate}}$):
+The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2 \ge 0$) maps to a strictly positive unipolar probability space ($0.0 \le P_{\text{raw}} < 1.0$) via a zero-anchored logistic activation function. This mathematical boundaries effectively compress low-level baseline fluctuations to manage actuator dead-zones, which is then dynamically normalized against the gating threshold ($\theta_{\text{gate}}$):
 
 $$ P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0 $$
 
 $$ P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases} $$
 
 $$ \text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)} $$
+
 
