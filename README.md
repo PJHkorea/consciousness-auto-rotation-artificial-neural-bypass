@@ -108,7 +108,9 @@ The state vector $\hat{\mathbf{x}}_{k|k-1}$ is rotated deterministically in the 
 
 $$\hat{\mathbf{x}}_{k|k-1} = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1|k-1}$$
 
-The prior error covariance matrix $\mathbf{P}_{k|k-1} = \mathbf{F}\mathbf{P}_{k-1|k-1}\mathbf{F}^T + \mathbf{Q}$ is expanded algebraically into exact scalar components to preserve numerical symmetry without matrix overhead:
+The prior error covariance matrix is expanded algebraically into exact scalar components to preserve numerical symmetry without matrix overhead:
+
+$$\mathbf{P}_{k|k-1} = \mathbf{F}\mathbf{P}_{k-1|k-1}\mathbf{F}^T + \mathbf{Q}$$
 
 $$p_{00\_ \text{m}} = (\cos^2\theta \cdot p_{00}) - (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\sin^2\theta \cdot p_{11}) + Q$$
 
