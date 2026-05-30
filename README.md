@@ -106,70 +106,65 @@ $$W_{\text{gate}}[k] = \max\left(0.1, \,\, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E
 $$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
 
 ### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
-The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm ($X_{\text{brain}}$) hidden in the filtered potential.
+
+The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm ( $X_{\text{brain}}$ ) hidden in the filtered potential.
 
 #### A. Time Update (Predictive Step)
-$$
-\hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & \sin\theta \\ -\sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1}
-$$
 
-$$
-p_{00_\text{m}} = \cos^2\theta \cdot p_{00} + 2\cos\theta\sin\theta \cdot p_{01} + \sin^2\theta \cdot p_{11} + Q
-$$
+The state vector $\hat{\mathbf{x}}_{k\vert{}k-1}$ is rotated deterministically in the 2D plane:
 
-$$
-p_{01_\text{m}} = -\cos\theta\sin\theta \cdot p_{00} + (\cos^2\theta - \sin^2\theta) \cdot p_{01} + \cos\theta\sin\theta \cdot p_{11}
-$$
+$$ \hat{\mathbf{x}}_{k\vert{}k-1} = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1\vert{}k-1} $$
 
-$$
-p_{11_\text{m}} = \sin^2\theta \cdot p_{00} - 2\cos\theta\sin\theta \cdot p_{01} + \cos^2\theta \cdot p_{11} + Q
-$$
+The prior error covariance matrix $\mathbf{P}_{k\vert{}k-1} = \mathbf{F}\mathbf{P}_{k-1\vert{}k-1}\mathbf{F}^T + \mathbf{Q}$ is expanded algebraically into exact scalar components to preserve numerical symmetry without matrix overhead:
+
+$$ p_{00_\text{m}} = (\cos^2\theta \cdot p_{00}) - (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\sin^2\theta \cdot p_{11}) + Q $$
+
+$$ p_{01_\text{m}} = (\cos\theta\sin\theta \cdot (p_{00} - p_{11})) + (\cos^2\theta - \sin^2\theta) \cdot p_{01} $$
+
+$$ p_{11_\text{m}} = (\sin^2\theta \cdot p_{00}) + (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\cos^2\theta \cdot p_{11}) + Q $$
 
 #### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
-To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the **Joseph Form Equation** ($M = I - KH, \ H=\begin{bmatrix}1 & 0\end{bmatrix}$):
 
-$$
-m_0 = 1.0 - k_0
-$$
+To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the **Symmetric Joseph Form Equation** ($\mathbf{P}_{k\vert{}k} = (\mathbf{I} - \mathbf{K}\mathbf{H})\mathbf{P}_{k\vert{}k-1}(\mathbf{I} - \mathbf{K}\mathbf{H})^T + \mathbf{K}\mathbf{R}\mathbf{K}^T$):
 
-$$
-p_{00_\text{new}} = (m_0^2 \cdot p_{00_\text{m}}) + (k_0^2 \cdot R)
-$$
+$$ m_0 = 1.0 - k_0 $$
 
-$$
-p_{01_\text{new}} = (-k_1 \cdot m_0 \cdot p_{00_\text{m}}) + (m_0 \cdot p_{01_\text{m}}) + (k_0 \cdot k_1 \cdot R)
-$$
+$$ p_{00_\text{new}} = (m_0^2 \cdot p_{00_\text{m}}) + (k_0^2 \cdot R) $$
 
-$$
-p_{11_\text{new}} = (k_1^2 \cdot p_{00_\text{m}}) - (2.0 \cdot k_1 \cdot p_{01_\text{m}}) + p_{11_\text{m}} + (k_1^2 \cdot R)
-$$
+$$ p_{01_\text{new}} = (m_0 \cdot p_{01_\text{m}}) - (k_1 \cdot m_0 \cdot p_{00_\text{m}}) + (k_0 \cdot k_1 \cdot R) $$
+
+$$ p_{11_\text{new}} = p_{11_\text{m}} - (2.0 \cdot k_1 \cdot p_{01_\text{m}}) + (k_1^2 \cdot p_{00_\text{m}}) + (k_1^2 \cdot R) $$
 
 #### C. Sub-zero Divergence Guard & Boundary Mapping
+
 When the innovation covariance falls below safety thresholds due to severe transient noise, boundary mapping prevents zero-division and matrix singularity:
 
-$$
-\text{If } (p_{00_\text{m}} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop}
-$$
+$$ \text{If } (p_{00_\text{m}} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop} $$
 
-$$
-p_{00_\text{guard}} = \max(p_{00_\text{new}}, 10^{-14}), \quad p_{11_\text{guard}} = \max(p_{11_\text{new}}, 10^{-14})
-$$
+$$ p_{00_\text{guard}} = \max(p_{00_\text{new}}, 10^{-14}), \quad p_{11_\text{guard}} = \max(p_{11_\text{new}}, 10^{-14}) $$
 
 The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cross-covariance component against numerical underflow, preventing structural asymmetry and filter explosion:
 
-$$
-p_{\text{prod}} = p_{00_\text{guard}} \cdot p_{11_\text{guard}}
-$$
+$$ p_{\text{prod}} = p_{00_\text{guard}} \cdot p_{11_\text{guard}} $$
 
-$$
-\lvert p_{01_\text{guard}} \rvert \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}
-$$
+$$ \lvert p_{01_\text{guard}} \rvert \le \sqrt{\max(p_{\text{prod}}, 10^{-28})} $$
+
+#### D. Real-Time Exception & Failsafe Continuity
+
+If any numeric anomaly ($NaN$ or Overflow) is detected, or state variables breach hard boundaries ($10^{10}$), the system drops the singular covariance matrix back to identity, but critically **preserves the linear system trajectory via the prediction state** to ensure actuator signal continuity:
+
+$$ \text{If } \text{Anomaly Detected} \Longrightarrow \begin{cases} \mathbf{x}_{k\vert{}k} = \mathbf{x}_{k\vert{}k-1} \\ \mathbf{P}_{k\vert{}k} = \mathbf{I} \end{cases} $$
 
 ### 4. Phase 4: Actuator Trigger Mapping
-The state vector's root-mean-square energy maps to the probability space ($P_{\text{state}}$) through a continuous sigmoid function with dimensional homogeneity, delivering a stable digital command to the actuator controller:
 
-$$
-P_{\text{state}}\left[ k \right] = \frac{1}{1 + e^{-\lambda \left( (x_0^2 + x_1^2) - \theta_{\text{baseline}} \right)}}
+The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2$) maps to a zero-centered symmetric probability space ($P_{\text{raw}}$) via a scaled logistic activation to manage actuator dead-zones, which is then dynamically normalized against the gating threshold ($\theta_{\text{gate}}$):
+
+$$ P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0 $$
+
+$$ P_{\text{state}} = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases} $$
+
+$$ \text{If } P_{\text{state}} > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)} $$
+
 $$
 
 $$
