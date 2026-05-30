@@ -96,7 +96,7 @@ $$E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \c
 
 $$W_{\text{gate}}[k] = \max\left(0.1, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)$$
 
-$$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
+$$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot $W_{\text{gate}}[k]$$
 
 ### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
 
@@ -124,7 +124,7 @@ $$m_0 = 1.0 - k_0$$
 
 $$p_{00_\text{new}} = (m_0^2 \cdot p_{00_\text{m}}) + (k_0^2 \cdot R)$$
 
-$$p_{01_\text{new}} = (m_0 \cdot p_{01_\text{m}}) - (k_1 \cdot m_0 * p_{00_\text{m}}) + (k_0 \cdot k_1 \cdot R)$$
+$$p_{01_\text{new}} = (m_0 \cdot p_{01_\text{m}}) - (k_1 \cdot m_0 \cdot p_{00_\text{m}}) + (k_0 \cdot k_1 \cdot R)$$
 
 $$p_{11_\text{new}} = p_{11_\text{m}} - (2.0 \cdot k_1 \cdot p_{01_\text{m}}) + (k_1^2 \cdot p_{00_\text{m}}) + (k_1^2 \cdot R)$$
 
@@ -157,6 +157,3 @@ $$P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0$$
 $$P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}$$
 
 $$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
-
-
-
