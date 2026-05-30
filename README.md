@@ -161,3 +161,4 @@ $$P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0$$
 $$P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} \lt \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}$$
 
 $$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
+
