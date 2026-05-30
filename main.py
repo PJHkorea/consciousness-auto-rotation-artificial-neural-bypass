@@ -3,160 +3,193 @@ import numba as nb
 import math
 import matplotlib.pyplot as plt
 
-# -------------------------------------------------------------------------
-# [Phase 1] 2x2 Joseph Form Kalman Filter & Stability Guard Core (Mission-Critical)
-# [Phase 1] 2x2 조셉 폼 칼만 필터 및 수치 안정성 가드 코어
-# -------------------------------------------------------------------------
-@nb.njit(cache=True, nogil=True, fastmath=True)
+# =========================================================================
+# CORE FILTER ENGINE (Fixed Mathematical Formula & Cleaned Dead Code)
+# =========================================================================
+@nb.njit(cache=True, nogil=True, fastmath=False)
 def _execute_single_step_core(
     raw_signal, p00, p01, p11, x0, x1, 
     cos_t, sin_t, q_noise, r_noise, lambda_val, theta
 ):
-    """
-    Executes scalar operations for single-channel 2x2 state estimation.
-    Enforces dual-layer Cauchy-Schwarz numerical stability guards.
-    
-    단일 채널의 2x2 상태 추정을 스칼라 대수 전개로 연산합니다.
-    이중 레이어 코시-슈바르츠 부등식 기반 수치 가드를 강제합니다.
-    """
-    # 1. State Prediction (2D Vibration Rotation Model)
-    # 1. 상태 예측 (2차원 회전 모델 대수 전개)
+    # State Prediction
     x0_pred = cos_t * x0 - sin_t * x1
     x1_pred = sin_t * x0 + cos_t * x1
 
-    # 2. Error Covariance Prediction (P_minus = F * P * F^T + Q)
-    # 2. 오차 공분산 예측 (F * P * F^T + Q 대수 전개)
-    t0 = cos_t * p00 - sin_t * p01
-    t1 = cos_t * p01 - sin_t * p11
-    t2 = sin_t * p00 + cos_t * p01
-    t3 = sin_t * p01 + cos_t * p11
+    cos_sq = cos_t * cos_t
+    sin_sq = sin_t * sin_t
+    cos_sin = cos_t * sin_t
 
-    p00_m = cos_t * t0 - sin_t * t1 + q_noise
-    p01_m = sin_t * t0 + cos_t * t1
-    p11_m = sin_t * t2 + cos_t * t3 + q_noise
+    # Covariance Prediction
+    p00_m = (cos_sq * p00) - (2.0 * cos_sin * p01) + (sin_sq * p11) + q_noise
+    p01_m = (cos_sin * (p00 - p11)) + ((cos_sq - sin_sq) * p01)
+    p11_m = (sin_sq * p00) + (2.0 * cos_sin * p01) + (cos_sq * p11) + q_noise
     
-    # [Stability Guard] Prevent micro-asymmetry during prediction step under fastmath optimization
-    # [수치 가드 보완] fastmath 컴파일 시 발생 가능한 예측 단계의 미세 대칭성 왜곡 차단
     p_prod_m = p00_m * p11_m
-    max_p01_m = math.sqrt(p_prod_m if p_prod_m > 1e-28 else 1e-28)
-    if p01_m > max_p01_m:
-        p01_m = max_p01_m
-    elif p01_m < -max_p01_m:
-        p01_m = -max_p01_m
+    max_p01_m = math.sqrt(p_prod_m if p_prod_m > 1e-56 else 1e-56)
+    if abs(p01_m) > max_p01_m:
+        p01_m = max_p01_m if p01_m >= 0.0 else -max_p01_m
 
-    # 3. Kalman Gain (Innovation Covariance Safeguard)
-    # 3. 칼만 이득 계산 (이노베이션 공분산 붕괴 방어 가드 탑재)
+    # Innovation Covariance
     innov_cov = p00_m + r_noise
     if innov_cov < 1e-9:
         innov_cov = 1e-9
 
+    # Kalman Gain
     k0 = p00_m / innov_cov
     k1 = p01_m / innov_cov
 
-    # 4. Exact Joseph Form Covariance Update (Guarantees Positive-Definiteness)
-    # 4. 조셉 폼 오차 공분산 업데이트 (양의 정치성 및 대수적 대칭성 절대 보장)
     one_minus_k0 = 1.0 - k0
+
+    # Josephson Form Covariance Update (Corrected & Standardized)
     p00_new = (one_minus_k0 * one_minus_k0 * p00_m) + (k0 * k0 * r_noise)
     p01_new = (one_minus_k0 * p01_m) - (k1 * one_minus_k0 * p00_m) + (k0 * k1 * r_noise)
-    p11_new = (k1 * k1 * p00_m) - (2.0 * k1 * one_minus_k0 * p01_m) + p11_m + (k1 * k1 * r_noise)
+    p11_new = p11_m - (2.0 * k1 * p01_m) + (k1 * k1 * p00_m) + (k1 * k1 * r_noise)
 
-    # 5. Real-time Numerical Guard using Cauchy-Schwarz Inequality
-    # 5. 코시-슈바르츠 부등식 기반 실시간 수치 가드 강제 (업데이트 단계)
+    # Hard Bounds for Stability
+    if p00_new < 1e-28: p00_new = 1e-28
+    if p11_new < 1e-28: p11_new = 1e-28
+
     p_prod = p00_new * p11_new
-    max_p01 = math.sqrt(p_prod if p_prod > 1e-28 else 1e-28)
-    if p01_new > max_p01:
-        p01_new = max_p01
-    elif p01_new < -max_p01:
-        p01_new = -max_p01
+    max_p01 = math.sqrt(p_prod if p_prod > 1e-56 else 1e-56)
+    if abs(p01_new) > max_p01:
+        p01_new = max_p01 if p01_new >= 0.0 else -max_p01
 
-    # 6. State Update
-    # 6. 상태 업데이트
+    # State Update
     innovation = raw_signal - x0_pred
     x0_new = x0_pred + k0 * innovation
     x1_new = x1_pred + k1 * innovation
 
-    # 7. Zero-Baseline Hyper-Sigmoid Gating Actuation (Continuous Soft-Thresholding)
-    # 7. 제로 베이스라인 하이퍼 시그모이드 게이팅 (물리적 제어 불연속성 방지 선형 맵핑)
+    # Exception Guard
+    if (math.isnan(x0_new) or math.isnan(x1_new) or 
+        math.isnan(p00_new) or math.isnan(p01_new) or math.isnan(p11_new) or
+        not (abs(x0_new) < 1e10 and abs(x1_new) < 1e10 and 
+             p00_new >= 1e-28 and p00_new < 1e10 and 
+             abs(p01_new) < 1e10 and 
+             p11_new >= 1e-28 and p11_new < 1e10)):
+        x0_new, x1_new = 0.0, 0.0
+        p00_new, p01_new, p11_new = 1.0, 0.0, 1.0
+
+    # Energy Probability Mapping (Simplified Logic)
     X_intent_energy = x0_new * x0_new + x1_new * x1_new
     scaled_energy = lambda_val * X_intent_energy
 
-    # Floating-point exponential overflow protection guard
-    # 지수 오버플로우 방지 가드
-    if scaled_energy > 20.0:
+    if scaled_energy > 16.0:
         raw_prob = 1.0
+    elif scaled_energy < 1e-12:
+        raw_prob = 0.0
     else:
         raw_prob = (2.0 / (1.0 + math.exp(-scaled_energy))) - 1.0
 
-    # Soft-thresholding interpolation: Protects hardware actuators and ensures control integrity
-    # 임계값을 넘는 순간부터 0.0 ~ 1.0까지 부드럽게 점진 가속하도록 교정
-    if raw_prob < theta:
-        p_state = 0.0
-    else:
-        p_state = (raw_prob - theta) / (1.0 - theta)
+    local_theta = theta if theta < 1.0 else 0.999999
+    p_state = 0.0 if raw_prob < local_theta else (raw_prob - local_theta) / (1.0 - local_theta)
 
     return p00_new, p01_new, p11_new, x0_new, x1_new, p_state
 
 
-# -------------------------------------------------------------------------
-# [Phase 2] Simulation Hub / Execution Layer
-# [Phase 2] 시뮬레이션 허브 및 실행 레이어
-# -------------------------------------------------------------------------
-def run_simulation():
-    fs = 250.0
-    target_freq = 10.0
-    dt = 1.0 / fs
-    total_time = 10.0
-    t = np.arange(0, total_time, dt)
-    n_samples = len(t)
-
-    # Pre-compute trigonometric rotation units for JIT execution
-    # 상수의 사전 처리 및 삼각함수 유닛 컴파일러 주입 가속화
-    theta_rot = 2.0 * np.pi * target_freq * dt
-    cos_t = np.cos(theta_rot)
-    sin_t = np.sin(theta_rot)
-
-    # Generate synthetic target signal and heavy Gaussian white noise
-    # 타겟 신호 및 강한 백색 잡음 생성 레이어
-    pure_signal = np.sin(2.0 * np.pi * target_freq * t)
-    noise = np.random.normal(0, 1.5, n_samples)
-    raw_eeg = pure_signal + noise
-
-    # Force continuous intent synchronization interval (4.0s to 7.0s energy burst)
-    # 의식 활성화 구간 강제 시뮬레이션 (4초 ~ 7초 사이 뇌파 동기화 급증 상황 모사)
-    active_mask = (t >= 4.0) & (t <= 7.0)
-    raw_eeg[active_mask] += 3.0 * np.sin(2.0 * np.pi * target_freq * t[active_mask])
-
-    # Pre-allocate buffer states and statistics memory views
-    # 상태 버퍼 및 통계 변수 배열 할당 (프리-알로케이션 및 캐싱)
-    p00, p01, p11 = 1.0, 0.0, 1.0
-    x0, x1 = 0.0, 0.0
-    
-    q_noise = 1e-4
-    r_noise = 1e-2
-    lambda_val = 0.5   
-    theta_gate = 0.3   
-
-    est_x0 = np.zeros(n_samples)
-    prob_history = np.zeros(n_samples)
-
-    # High-speed single loop processing pipeline
-    # 고속 단일 루프 파이프라인 가동
+# =========================================================================
+# BATCH EXECUTION LOOP 
+# =========================================================================
+@nb.njit(cache=True, nogil=True, fastmath=False)
+def _process_batch_loop(
+    signal_array, est_x0, prob_history, p00, p01, p11, x0, x1,
+    cos_t, sin_t, q_noise, r_noise, lambda_val, theta_gate
+):
+    n_samples = len(signal_array)
     for i in range(n_samples):
         p00, p01, p11, x0, x1, p_state = _execute_single_step_core(
-            raw_eeg[i], p00, p01, p11, x0, x1,
+            signal_array[i], p00, p01, p11, x0, x1,
             cos_t, sin_t, q_noise, r_noise, lambda_val, theta_gate
         )
         est_x0[i] = x0
         prob_history[i] = p_state
+        
+    return p00, p01, p11, x0, x1
 
-    # Data Visualization Pipeline (Matplotlib)
-    # 시각화 파이프라인
+
+# =========================================================================
+# WRAPPER INTERFACE (Optimized Overhead)
+# =========================================================================
+class ScalarJosephKalmanFilter:
+    def __init__(self, fs, target_freq, q_noise=1e-3, r_noise=2.25, lambda_val=0.5, theta_gate=0.3):
+        dt = 1.0 / fs
+        theta_rot = 2.0 * np.pi * target_freq * dt
+        
+        self.cos_t = float(np.cos(theta_rot))
+        self.sin_t = float(np.sin(theta_rot))
+        
+        self.q_noise = float(q_noise)
+        self.r_noise = float(r_noise)
+        self.lambda_val = float(lambda_val)
+        self.theta_gate = float(theta_gate)
+        
+        self.p00, self.p01, self.p11 = 1.0, 0.0, 1.0
+        self.x0, self.x1 = 0.0, 0.0
+
+    def update(self, raw_signal):
+        self.p00, self.p01, self.p11, self.x0, self.x1, p_state = _execute_single_step_core(
+            float(raw_signal), self.p00, self.p01, self.p11, self.x0, self.x1,
+            self.cos_t, self.sin_t, self.q_noise, self.r_noise, self.lambda_val, self.theta_gate
+        )
+        return self.x0, p_state
+
+    def process_batch(self, signal_array):
+        # Fast & Safe array casting without redundant flag checking
+        safe_signal = np.asarray(signal_array, dtype=np.float64)
+
+        n_samples = len(safe_signal)
+        est_x0 = np.zeros(n_samples, dtype=np.float64)
+        prob_history = np.zeros(n_samples, dtype=np.float64)
+
+        p00, p01, p11, x0, x1 = _process_batch_loop(
+            safe_signal, est_x0, prob_history,
+            self.p00, self.p01, self.p11, self.x0, self.x1,
+            self.cos_t, self.sin_t, self.q_noise, self.r_noise, self.lambda_val, self.theta_gate
+        )
+        self.p00, self.p01, self.p11 = p00, p01, p11
+        self.x0, self.x1 = x0, x1
+            
+        return est_x0, prob_history
+
+    def reset(self):
+        self.p00, self.p01, self.p11 = 1.0, 0.0, 1.0
+        self.x0, self.x1 = 0.0, 0.0
+
+
+# =========================================================================
+# SIMULATION LAYER
+# =========================================================================
+def run_simulation():
+    fs = 250.0
+    dt = 1.0 / fs  
+    target_freq = 10.0
+    total_time = 10.0
+    t = np.arange(0, total_time, dt)
+    n_samples = len(t)
+
+    pure_signal = np.sin(2.0 * np.pi * target_freq * t)
+    noise = np.random.normal(0, 1.5, n_samples)
+    raw_eeg = pure_signal + noise
+
+    active_mask = (t >= 4.0) & (t <= 7.0)
+    raw_eeg[active_mask] += 3.0 * np.sin(2.0 * np.pi * target_freq * t[active_mask])
+
+    kf = ScalarJosephKalmanFilter(
+        fs=fs, 
+        target_freq=target_freq, 
+        q_noise=1e-3, 
+        r_noise=2.25, 
+        lambda_val=0.5, 
+        theta_gate=0.3
+    )
+    
+    est_x0, prob_history = kf.process_batch(raw_eeg)
+
     plt.figure(figsize=(12, 8))
     
     plt.subplot(3, 1, 1)
     plt.plot(t, raw_eeg, color='gray', alpha=0.6, label='Raw EEG (with Noise)')
     plt.plot(t, pure_signal, color='blue', linestyle='--', label='Target Intent Ground Truth')
-    plt.title('Consciousness Auto-Rotation Tracking Signal Hub (Perfect Edge Spec)')
+    plt.title('2x2 Pure Scalar Joseph Form Kalman Filter')
     plt.legend()
     plt.grid(True)
 
