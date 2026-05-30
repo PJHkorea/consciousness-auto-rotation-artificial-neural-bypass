@@ -32,54 +32,45 @@ The data pipeline consists of an optimized 3-stage linear processing loop that o
 
 ```mermaid
 graph TD
-    %% 스타일 정의
     classDef input fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,stroke-dasharray: 5 5;
     classDef process fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
     classDef output fill:#efebe9,stroke:#5d4037,stroke-width:2px;
     classDef loop fill:#e8f5e9,stroke:#2e7d32,stroke-width:3px;
 
-    %% 입력 데이터 레이어
     subgraph INPUT_STAGE [Input Data Layer]
         Y_raw["Y_raw(t) <br> Raw Cranial Biopotentials"]:::input
         I_stim["I_stim(t) <br> High-Amp Stimulation Input"]:::input
         S_autobio["S_autobio(t) <br> Autobiographical Salience Prompt"]:::input
     end
 
-    %% 실시간 신호처리 및 연산 레이어
     subgraph COMP_LOOP [ARCF Core Computational Loop]
         Phase1["Phase 1: Linear Impedance Cancellation <br> <i>High-Q IIR Notch Filter Line Elimination</i>"]:::process
         Phase2["Phase 2: Physiological Mutual Information Gating <br> <i>Fused Numba JIT (nogil=True, fastmath=True)</i>"]:::process
         Phase3["Phase 3: State-Space Minimal Variance Estimation <br> <i>Statically Allocated Scalar Joseph Form Loop</i>"]:::process
     end
 
-    %% 출력 및 액추에이터 제어 레이어
     subgraph OUTPUT_STAGE [Output & Control Layer]
         P_intent["P_state(t) <br> Sigmoid Energy-Dimensional Mapping"]:::output
         Trigger{"Threshold Check <br> P_state(t) > 0.75"}:::output
         ExoRobot["Trigger Actuator Controller <br> Robotic Exoskeleton On"]:::output
     end
 
-    %% 데이터 흐름 연결
     Y_raw --> Phase1
     I_stim --> Phase1
-    
     Phase1 -->|Y_ccl Signal Buffer| Phase2
     S_autobio -->|Cognitive Resonance Gate Trigger| Phase2
-    
     Phase2 -->|Y_filtered_signal Spectrum| Phase3
-    
     Phase3 -->|X_intent_energy Power V²| P_intent
     P_intent --> Trigger
-    
-    %% 폐루프 수렴 (거울 되먹임 루프)
+
     Trigger -->|YES| ExoRobot
     ExoRobot -.->|<b>Mirror Feedback Loop</b> <br> Afferent Somatosensory Feedback| Y_raw:::loop
 
-    %% 스타일 적용
     style COMP_LOOP fill:#fff,stroke:#333,stroke-width:1px
     style INPUT_STAGE fill:#fff,stroke:#333,stroke-width:1px
     style OUTPUT_STAGE fill:#fff,stroke:#333,stroke-width:1px
 ```
+
 
 ---
 
