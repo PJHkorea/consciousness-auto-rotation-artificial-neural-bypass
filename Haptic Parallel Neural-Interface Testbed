@@ -1,0 +1,241 @@
+import socket
+import sys
+import gc
+import numpy as np
+import numba as nb
+import math
+
+# =========================================================================
+# [Phase 1 & 2] HPNT Core JIT Engine (Zero-Allocation Architecture)
+# =========================================================================
+@nb.njit(fastmath=True, cache=True, nogil=True)
+def execute_channel_step(
+    raw_signal, p00, p01, p11, x0, x1, 
+    cos_t, sin_t, q_noise, r_noise, threshold
+):
+    # 1. State Prediction (2D Vibration Rotation Model)
+    x0_pred = cos_t * x0 - sin_t * x1
+    x1_pred = sin_t * x0 + cos_t * x1
+
+    # 2. Error Covariance Prediction (Algebraic Separation Layout)
+    t0 = cos_t * p00 - sin_t * p01
+    t1 = cos_t * p01 - sin_t * p11
+    t2 = sin_t * p00 + cos_t * p01
+    t3 = sin_t * p01 + cos_t * p11
+
+    p00_m = cos_t * t0 - sin_t * t1 + q_noise
+    p01_m = sin_t * t0 + cos_t * t1
+    p11_m = sin_t * t2 + cos_t * t3 + q_noise
+
+    # 3. Kalman Gain Calculation
+    innov_cov = p00_m + r_noise
+    if innov_cov < 1e-9: innov_cov = 1e-9
+
+    k0 = p00_m / innov_cov
+    k1 = p01_m / innov_cov
+
+    # 4. Exact Joseph Form Covariance Update
+    one_minus_k0 = 1.0 - k0
+    p00_new = (one_minus_k0 * one_minus_k0 * p00_m) + (k0 * k0 * r_noise)
+    p01_new = (one_minus_k0 * p01_m) - (k1 * one_minus_k0 * p00_m) + (k0 * k1 * r_noise)
+    p11_new = (k1 * k1 * p00_m) - (2.0 * k1 * one_minus_k0 * p01_m) + p11_m + (k1 * k1 * r_noise)
+
+    # 5. Cauchy-Schwarz Runtime Stability Guard
+    p_prod = p00_new * p11_new
+    max_p01 = math.sqrt(p_prod if p_prod > 1e-28 else 1e-28)
+    if p01_new > max_p01: p01_new = max_p01
+    elif p01_new < -max_p01: p01_new = -max_p01
+
+    # 6. State Update
+    innovation = raw_signal - x0_pred
+    x0_new = x0_pred + k0 * innovation
+    x1_new = x1_pred + k1 * innovation
+
+    # 7. Failsafe Hold Logic
+    if (math.isnan(x0_new) or math.isnan(x1_new) or abs(x0_new) > 1e10 or abs(x1_new) > 1e10):
+        x0_new, x1_new = x0_pred, x1_pred
+        p00_new, p01_new, p11_new = 1.0, 0.0, 1.0
+
+    # 8. Zero-Baseline Hyper-Sigmoid Gating Actuation
+    energy = x0_new * x0_new + x1_new * x1_new
+    p_state = (2.0 / (1.0 + math.exp(-energy))) - 1.0
+    action_trigger = 1 if p_state >= threshold else 0
+
+    return p00_new, p01_new, p11_new, x0_new, x1_new, p_state, action_trigger
+
+
+@nb.njit(fastmath=True, cache=True, nogil=True, parallel=True)
+def _jitted_parallel_loop_kernel(
+    num_channels, input_signals, p00, p01, p11, x0, x1,
+    cos_t, sin_t, q_noise, r_noise, threshold, probabilities, triggers
+):
+    for ch in nb.prange(num_channels):
+        p00_n, p01_n, p11_n, x0_n, x1_n, p_state, trigger = execute_channel_step(
+            input_signals[ch], p00[ch], p01[ch], p11[ch], x0[ch], x1[ch],
+            cos_t[ch], sin_t[ch], q_noise, r_noise, threshold
+        )
+        p00[ch], p01[ch], p11[ch] = p00_n, p01_n, p11_n
+        x0[ch], x1[ch] = x0_n, x1_n
+        probabilities[ch] = p_state
+        triggers[ch] = trigger
+
+
+class HPNTMultiChannelEngine:
+    def __init__(self, num_channels=4, sample_rate=250.0, target_freqs=None):
+        self.num_channels = num_channels
+        self.threshold = 0.75  
+        dt = 1.0 / sample_rate
+
+        if target_freqs is None:
+            freq_array = np.ones(num_channels, dtype=np.float64) * 10.0
+        else:
+            freq_array = np.array(target_freqs, dtype=np.float64)
+
+        theta_array = 2.0 * math.pi * freq_array * dt
+        self.cos_t = np.cos(theta_array)
+        self.sin_t = np.sin(theta_array)
+        self.q_noise = 1e-4
+        self.r_noise = 1e-2
+
+        # Memory Pre-allocation (No Heap GC interference)
+        self.p00 = np.ones(num_channels, dtype=np.float64)
+        self.p01 = np.zeros(num_channels, dtype=np.float64)
+        self.p11 = np.ones(num_channels, dtype=np.float64)
+        self.x0 = np.zeros(num_channels, dtype=np.float64)
+        self.x1 = np.zeros(num_channels, dtype=np.float64)
+
+        # Permanent Output Buffers (Zero-Allocation)
+        self.probabilities = np.zeros(num_channels, dtype=np.float64)
+        self.triggers = np.zeros(num_channels, dtype=np.int32)
+
+    def process_multi_channel(self, input_signals):
+        _jitted_parallel_loop_kernel(
+            self.num_channels, input_signals,
+            self.p00, self.p01, self.p11, self.x0, self.x1,
+            self.cos_t, self.sin_t, self.q_noise, self.r_noise, self.threshold,
+            self.probabilities, self.triggers
+        )
+        return self.probabilities, self.triggers
+
+
+# =========================================================================
+# [Phase 3] High-Speed Stream Ingestion & Packaging Pipe
+# =========================================================================
+BUFFER_MAX_SIZE = 4096
+
+def run_multichannel_haptic_bypass(host="127.0.0.1", port=9999, num_channels=4, freqs=None):
+    gc.disable() # Disable GC to force zero-jitter behavior
+    
+    engine = HPNTMultiChannelEngine(num_channels=num_channels, target_freqs=freqs)
+    
+    # Warm-up compile before going live
+    warmup_signals = np.zeros(num_channels, dtype=np.float64)
+    _, _ = engine.process_multi_channel(warmup_signals)
+
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    
+    conn = None
+    try:
+        server_socket.bind((host, port))
+        server_socket.listen(1)
+        print(f"[*] HPNT Core Active. Listening on {host}:{port}")
+        
+        conn, addr = server_socket.accept()
+        print(f"[+] Device Link established: {addr}")
+        conn.settimeout(0.02) # 20ms Jitter Boundary Window
+
+        recv_buffer = bytearray(BUFFER_MAX_SIZE)
+        buf_view = memoryview(recv_buffer)
+        bytes_in_buffer = 0
+
+        # Fixed Inputs Allocation for processing
+        current_inputs = np.zeros(num_channels, dtype=np.float64)
+        last_valid_inputs = np.zeros(num_channels, dtype=np.float64)
+
+        # Dynamic pre-packed ASCII response array [ch0,ch1,ch2,ch3\n] -> 8 bytes for 4 channels
+        # Dynamic length based on channel size to remain strictly Zero-Allocation
+        send_buffer = bytearray(num_channels * 2) 
+        send_buffer[-1] = 10 # '\n' character
+        send_view = memoryview(send_buffer)
+
+        while True:
+            try:
+                if bytes_in_buffer >= BUFFER_MAX_SIZE: bytes_in_buffer = 0
+                
+                max_receivable = BUFFER_MAX_SIZE - bytes_in_buffer
+                bytes_received = conn.recv_into(buf_view[bytes_in_buffer:bytes_in_buffer + max_receivable])
+                
+                if not bytes_received:
+                    print("[-] Device stream disconnected.")
+                    break
+                
+                bytes_in_buffer += bytes_received
+                start_ptr = 0
+
+                while True:
+                    newline_idx = recv_buffer.find(b'\n', start_ptr, bytes_in_buffer)
+                    if newline_idx == -1: break
+                    
+                    line_view = buf_view[start_ptr:newline_idx]
+                    start_ptr = newline_idx + 1
+                    
+                    if len(line_view) == 0: continue
+
+                    try:
+                        # Raw text parsing logic split by commas for multi-channels
+                        elements = bytes(line_view).split(b',')
+                        for ch in range(num_channels):
+                            current_inputs[ch] = float(elements[ch])
+                            last_valid_inputs[ch] = current_inputs[ch]
+                    except (ValueError, IndexError):
+                        continue
+
+                    # Concurrent Parallel Computation
+                    _, triggers = engine.process_multi_channel(current_inputs)
+
+                    # High-Speed Bit Packing to ASCII without standard join/format functions
+                    for ch in range(num_channels):
+                        send_buffer[ch * 2] = 48 + triggers[ch] # '0' or '1'
+                        if ch < num_channels - 1:
+                            send_buffer[ch * 2 + 1] = 44 # ',' character
+
+                    conn.sendall(send_view[:num_channels * 2])
+
+                if start_ptr > 0:
+                    rem_len = bytes_in_buffer - start_ptr
+                    if rem_len > 0:
+                        recv_buffer[:rem_len] = buf_view[start_ptr:bytes_in_buffer]
+                    bytes_in_buffer = rem_len
+
+            except socket.timeout:
+                # Failsafe Continuity: Process via last valid sensor frames on network drop
+                _, triggers = engine.process_multi_channel(last_valid_inputs)
+                
+                # Fast packing for HOLD frame
+                for ch in range(num_channels):
+                    send_buffer[ch * 2] = 48 + triggers[ch]
+                    if ch < num_channels - 1: send_buffer[ch * 2 + 1] = 44
+                
+                try:
+                    conn.sendall(send_view[:num_channels * 2])
+                except socket.error:
+                    break
+
+    except Exception as e:
+        print(f"[💥] Fatal System Failure: {e}", file=sys.stderr)
+    finally:
+        print("[*] Engaging Emergency Halt...")
+        if conn:
+            try:
+                conn.sendall(b"0,0,0,0,HALT\n")
+                conn.shutdown(socket.SHUT_RDWR)
+                conn.close()
+            except Exception: pass
+        server_socket.close()
+        gc.enable()
+        print("[*] HPNT System Safely Demobilized.")
+
+if __name__ == "__main__":
+    # Example: 4 channels targeting Finger, Wrist, Elbow, Shoulder frequencies respectively
+    run_multichannel_haptic_bypass(num_channels=4, freqs=[9.5, 10.0, 11.5, 13.0])
