@@ -90,13 +90,13 @@ $$\theta = 2\pi f \Delta t + \phi_{\text{delay}}$$
 
 ### 2. Phase 2: Physiological Mutual Information Gating
 
-To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight ($W_{\text{gate}}$) driven by a continuous sigmoid power synchronization profile:
+To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight ($W_{\text{gate}}[k]$) driven by a continuous sigmoid power synchronization profile:
 
 $$E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{notch}}[k]\right)^2$$
 
 $$W_{\text{gate}}[k] = \max\left(0.1, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)$$
 
-$$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot $W_{\text{gate}}[k]$$
+$$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
 
 ### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
 
@@ -154,6 +154,6 @@ The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2
 
 $$P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0$$
 
-$$P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}$$
+$$P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} \lt \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}$$
 
 $$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
