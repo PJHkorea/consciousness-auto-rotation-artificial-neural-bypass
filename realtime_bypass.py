@@ -1,32 +1,18 @@
-import socket
-import sys
-import gc
-import math
+import numpy as np
 import numba as nb
+import math
 
-# =========================================================================
-# CORE MATHEMATICAL FILTER PARAMETERS & GLOBAL CONSTANTS
-# =========================================================================
-EPSILON_INNOV = 1e-9       # Innovation Covariance Lower Bound
-EPSILON_GUARD = 1e-28      # Cauchy-Schwarz Geometric Mean Safeguard
-BUFFER_MAX_SIZE = 4096     # 정적 수신 버퍼 최대 크기 제한
+EPSILON_INNOV = 1e-9       
+EPSILON_GUARD = 1e-28      
 
-THRESHOLD_AUTOBIO_ACTIVE = 0.55    # 자극 활성화 상태 임계값
-THRESHOLD_AUTOBIO_INACTIVE = 0.75  # 일반 대기 상태 임계값
-
-# -------------------------------------------------------------------------
-# [Phase 1] 2x2 Joseph Form Kalman Filter & Stability Guard Core
-# -------------------------------------------------------------------------
 @nb.njit(cache=True, nogil=True, fastmath=False)
 def _execute_single_step_core(
     raw_signal, p00, p01, p11, x0, x1,
     cos_t, sin_t, q_noise, r_noise, lambda_val, theta
 ):
-    # 1. State Prediction
     x0_pred = cos_t * x0 - sin_t * x1
     x1_pred = sin_t * x0 + cos_t * x1
 
-    # 2. Error Covariance Prediction
     cos_sq = cos_t * cos_t
     sin_sq = sin_t * sin_t
     cos_sin = cos_t * sin_t
@@ -35,19 +21,20 @@ def _execute_single_step_core(
     p01_m = (cos_sin * (p00 - p11)) + ((cos_sq - sin_sq) * p01)
     p11_m = (sin_sq * p00) + (2.0 * cos_sin * p01) + (cos_sq * p11) + q_noise
 
-    # [Stability Guard Layer 1]
     p_prod_m = p00_m * p11_m
     max_p01_m = math.sqrt(p_prod_m if p_prod_m > EPSILON_GUARD else EPSILON_GUARD)
-    if p01_m > max_p01_m: p01_m = max_p01_m
-    elif p01_m < -max_p01_m: p01_m = -max_p01_m
+    if p01_m > max_p01_m:
+        p01_m = max_p01_m
+    elif p01_m < -max_p01_m:
+        p01_m = -max_p01_m
 
-    # 3. Kalman Gain
     innov_cov = p00_m + r_noise
-    if innov_cov < EPSILON_INNOV: innov_cov = EPSILON_INNOV
+    if innov_cov < EPSILON_INNOV:
+        innov_cov = EPSILON_INNOV
+
     k0 = p00_m / innov_cov
     k1 = p01_m / innov_cov
 
-    # 4. Exact Joseph Form Covariance Update
     one_minus_k0 = 1.0 - k0
     p00_new = (one_minus_k0 * one_minus_k0 * p00_m) + (k0 * k0 * r_noise)
     p01_new = (one_minus_k0 * p01_m) - (k1 * one_minus_k0 * p00_m) + (k0 * k1 * r_noise)
@@ -56,25 +43,23 @@ def _execute_single_step_core(
     if p00_new < 1e-14: p00_new = 1e-14
     if p11_new < 1e-14: p11_new = 1e-14
 
-    # [Stability Guard Layer 2]
     p_prod = p00_new * p11_new
     max_p01 = math.sqrt(p_prod if p_prod > EPSILON_GUARD else EPSILON_GUARD)
-    if p01_new > max_p01: p01_new = max_p01
-    elif p01_new < -max_p01: p01_new = -max_p01
+    if p01_new > max_p01:
+        p01_new = max_p01
+    elif p01_new < -max_p01:
+        p01_new = -max_p01
 
-    # 6. State Update
     innovation = raw_signal - x0_pred
     x0_new = x0_pred + k0 * innovation
     x1_new = x1_pred + k1 * innovation
 
-    # Exception Guard
     if (math.isnan(x0_new) or math.isnan(x1_new) or 
         math.isnan(p00_new) or math.isnan(p01_new) or math.isnan(p11_new) or
         abs(x0_new) > 1e10 or abs(x1_new) > 1e10):
         x0_new, x1_new = 0.0, 0.0
         p00_new, p01_new, p11_new = 1.0, 0.0, 1.0
 
-    # 7. Zero-Baseline Hyper-Sigmoid Gating Actuation
     X_intent_energy = x0_new * x0_new + x1_new * x1_new
     scaled_energy = lambda_val * X_intent_energy
 
@@ -101,6 +86,7 @@ class RealtimeBypassMassageEngine:
         self.q_noise = 1e-4
         self.r_noise = 1e-2
         self.lambda_val = 0.5
+        
         self.p00, self.p01, self.p11 = 1.0, 0.0, 1.0
         self.x0, self.x1 = 0.0, 0.0
 
@@ -110,12 +96,18 @@ class RealtimeBypassMassageEngine:
             self.cos_t, self.sin_t, self.q_noise, self.r_noise, self.lambda_val, float(current_th)
         )
         return p_state
+import socket
+import sys
+import gc
+from filter_core import RealtimeBypassMassageEngine
 
-# -------------------------------------------------------------------------
-# [Phase 2] Real-time TCP/IP Socket Infrastructure & Actuator Integration
-# -------------------------------------------------------------------------
+BUFFER_MAX_SIZE = 4096     
+THRESHOLD_AUTOBIO_ACTIVE = 0.55    
+THRESHOLD_AUTOBIO_INACTIVE = 0.75  
+
 def run_integrated_neural_bypass(host="127.0.0.1", port=9999):
     gc.disable()
+    
     engine = RealtimeBypassMassageEngine()  
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -127,7 +119,7 @@ def run_integrated_neural_bypass(host="127.0.0.1", port=9999):
         
         conn, addr = server_socket.accept()
         print(f"[+] Bi-directional stream established with sensor device: {addr}")
-        conn.settimeout(0.02)
+        conn.settimeout(0.02) 
         
         recv_buffer = bytearray(BUFFER_MAX_SIZE)
         buf_view = memoryview(recv_buffer)
@@ -141,9 +133,12 @@ def run_integrated_neural_bypass(host="127.0.0.1", port=9999):
         while True:
             try:
                 if bytes_in_buffer >= BUFFER_MAX_SIZE:
+                    print("[⚠️] Buffer Full without Newlines. Flushing static buffer memories.")
                     bytes_in_buffer = 0  
                 
-                bytes_received = conn.recv_into(buf_view[bytes_in_buffer:])
+                max_receivable = BUFFER_MAX_SIZE - bytes_in_buffer
+                bytes_received = conn.recv_into(buf_view[bytes_in_buffer:bytes_in_buffer + max_receivable])
+                
                 if not bytes_received:
                     print("[-] Stream interface disconnected by host device.")
                     break
@@ -157,12 +152,14 @@ def run_integrated_neural_bypass(host="127.0.0.1", port=9999):
                     
                     line_view = buf_view[start_ptr:newline_idx]
                     start_ptr = newline_idx + 1
-                    if len(line_view) == 0: continue
+                    
+                    if len(line_view) == 0:
+                        continue
                     
                     try:
                         comma_idx = -1
                         for i in range(len(line_view)):
-                            if line_view[i] == 44:
+                            if line_view[i] == 44:  
                                 comma_idx = i
                                 break
                         
@@ -176,7 +173,7 @@ def run_integrated_neural_bypass(host="127.0.0.1", port=9999):
                         last_valid_sample = raw_signal
                         current_th = THRESHOLD_AUTOBIO_ACTIVE if autobio_flag == 1 else THRESHOLD_AUTOBIO_INACTIVE
                     except (ValueError, IndexError):
-                        continue
+                        continue 
                     
                     p_state = engine.process_sample(raw_signal, current_th)
                     
@@ -184,11 +181,11 @@ def run_integrated_neural_bypass(host="127.0.0.1", port=9999):
                     if p_int > 10000: p_int = 10000
                     elif p_int < 0: p_int = 0
                     
-                    send_buffer[0] = 48 + (p_int // 10000)
-                    send_buffer[2] = 48 + ((p_int // 1000) % 10)
-                    send_buffer[3] = 48 + ((p_int // 100) % 10)
-                    send_buffer[4] = 48 + ((p_int // 10) % 10)
-                    send_buffer[5] = 48 + (p_int % 10)
+                    send_buffer[0] = 48 + (p_int // 10000)          
+                    send_buffer[2] = 48 + ((p_int // 1000) % 10)    
+                    send_buffer[3] = 48 + ((p_int // 100) % 10)     
+                    send_buffer[4] = 48 + ((p_int // 10) % 10)      
+                    send_buffer[5] = 48 + (p_int % 10)              
                     
                     conn.sendall(send_view[:7]) 
                 
