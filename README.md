@@ -74,7 +74,7 @@ graph TD
 
 ---
 
-## 📐 Technical Specification (Mathematical Formulation)
+markdown## 📐 Technical Specification (Mathematical Formulation)
 
 This section provides the definitive mathematical formulation for the Autobiographical Resonance-based Closed-loop Filter (ARCF).
 
