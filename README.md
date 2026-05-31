@@ -122,17 +122,11 @@ $$
 The prior error covariance matrix is expanded algebraically into exact scalar components to preserve numerical symmetry without matrix overhead ($P_{k|k-1} = FP_{k-1|k-1}F^T + Q$):
 
 
-$$
-p_{00\_ \text{m}} = (\cos^2\theta \cdot p_{00}) - (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\sin^2\theta \cdot p_{11}) + Q
-$$
+$$ p_{00_ \text{m}} = (\cos^2\theta \cdot p_{00}) - (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\sin^2\theta \cdot p_{11}) + Q $$
 
-$$
-p_{01\_ \text{m}} = (\cos\theta\sin\theta \cdot (p_{11} - p_{00})) + (\cos^2\theta - \sin^2\theta) \cdot p_{01}
-$$
+$$ p_{01_ \text{m}} = (\cos\theta\sin\theta \cdot (p_{00} - p_{11})) + (\cos^2\theta - \sin^2\theta) \cdot p_{01} $$
 
-$$
-p_{11\_ \text{m}} = (\sin^2\theta \cdot p_{00}) + (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\cos^2\theta \cdot p_{11}) + Q
-$$
+$$ p_{11_ \text{m}} = (\sin^2\theta \cdot p_{00}) + (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\cos^2\theta \cdot p_{11}) + Q $$
 
 #### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
 
