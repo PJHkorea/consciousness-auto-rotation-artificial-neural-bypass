@@ -207,15 +207,16 @@ While the system architecture traces a 2D state-space trajectory, the runtime en
 
 ### 2. Algebraic Scalar Joseph Form Expansion
 
-The mathematical representation of the error covariance update utilizes the **Symmetric Joseph Form Equation** $(I-KH)P(I-KH)^T + KRK^T$ to prevent numerical asymmetry. In the production C engine, this is fully expanded into raw scalar assignments:
+The mathematical representation of the error covariance update utilizes the **Symmetric Joseph Form Equation** $(I-KH)P(I-KH)^T + KRK^T$ to prevent numerical asymmetry. In the production C engine, this is fully expanded into raw scalar assignments, preserving algebraic grouping for maximum FPU performance:
 
 ```c
 double p00_new = (one_minus_k0 * one_minus_k0 * p00_m) + (k0 * k0 * r_noise);
-double p01_new = (one_minus_k0 * p01_m) - (k1 * one_minus_k0 * p00_m) + (k0 * k1_r_noise);
+double p01_new = one_minus_k0 * (p01_m - k1 * p00_m) + (k0 * k1 * r_noise);
 double p11_new = p11_m - (2.0 * k1 * p01_m) + (k1 * k1 * p00_m) + (k1 * k1 * r_noise);
 ```
 
 This formulation enforces positive-definiteness natively at the compiler level, mitigating floating-point truncation errors during long-duration runs.
+
 
 
 ### 3. Rigorous Boundary Gating & Failsafe Recovery
