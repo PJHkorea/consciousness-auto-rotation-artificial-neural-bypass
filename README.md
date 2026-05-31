@@ -74,7 +74,7 @@ graph TD
 
 ---
 
-##📐 Technical Specification (Mathematical Formulation)
+## 📐 Technical Specification (Mathematical Formulation)
 
 This section provides the definitive mathematical formulation for the Autobiographical Resonance-based Closed-loop Filter (ARCF).
 
@@ -82,21 +82,30 @@ This section provides the definitive mathematical formulation for the Autobiogra
 
 Primary elimination of the 60 Hz power-line artifact from the raw cranial biopotential ($Y_{\text{raw}}$) is executed using an inline digital Infinite Impulse Response (IIR) notch filter operating in Direct Form II structure to preserve hidden cognitive potentials ($Y_{\text{ccl}}$):
 
-$$Y_{\text{ccl}}[k] = \mathcal{L}_{\text{notch}}(Y_{\text{raw}}[k])$$
+$$
+Y_{\text{ccl}}[k] = \mathcal{L}_{\text{notch}}(Y_{\text{raw}}[k])
+$$
 
 An exact analytical feed-forward compensation for the frequency-dependent phase delay ($\phi_{\text{delay}}$) at the tracking target frequency (10 Hz) is integrated directly into the digital domain angular rotation calculation:
 
-$$\theta = 2\pi f \Delta t + \phi_{\text{delay}}$$
+$$
+\theta = 2\pi f \Delta t + \phi_{\text{delay}}
+$$
 
 ### 2. Phase 2: Physiological Mutual Information Gating
 
 To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight ($W_{\text{gate}}[k]$) driven by a continuous sigmoid power synchronization profile:
 
-$$E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{ccl}}[k]\right)^2$$
+$$
+E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{ccl}}[k]\right)^2
+$$
 
-$$W_{\text{gate}}[k] = \max\left(0.1, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)$$
+$$
+W_{\text{gate}}[k] = \max\left(0.1, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)
+$$
 
-$$Y_{\text{filtered}}[k] = Y_{\text{ccl}}[k] \cdot W_{\text{gate}}[k]$$
+$$
+Y_{\text{filtered}}[k] = Y_{\text{ccl}}[k] \cdot W_{\text{gate}}[k]$$
 
 ### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
 
@@ -107,22 +116,18 @@ The discrete state-space framework models the system to track the microscopic 10
 The state vector $\hat{\mathbf{x}}_{k|k-1}$ is rotated deterministically in the 2D plane:
 
 $$
-\hat{\mathbf{x}}_{k|k-1} = 
-\begin{bmatrix} 
-\cos\theta & -\sin\theta \\\\ 
-\sin\theta & \cos\theta 
-\end{bmatrix} 
-\hat{\mathbf{x}}_{k-1|k-1}
+\hat{\mathbf{x}}_{k|k-1} = \begin{bmatrix} \cos\theta & -\sin\theta \\\\ \sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1|k-1}
 $$
 
 The prior error covariance matrix is expanded algebraically into exact scalar components to preserve numerical symmetry without matrix overhead ($P_{k|k-1} = FP_{k-1|k-1}F^T + Q$):
+
 
 $$
 p_{00\_ \text{m}} = (\cos^2\theta \cdot p_{00}) - (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\sin^2\theta \cdot p_{11}) + Q
 $$
 
 $$
-p_{01\_ \text{m}} = (\cos\theta\sin\theta \cdot (p_{00} - p_{11})) + (\cos^2\theta - \sin^2\theta) \cdot p_{01}
+p_{01\_ \text{m}} = (\cos\theta\sin\theta \cdot (p_{11} - p_{00})) + (\cos^2\theta - \sin^2\theta) \cdot p_{01}
 $$
 
 $$
@@ -134,8 +139,6 @@ $$
 To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the Symmetric Joseph Form Equation ($P_{k|k} = (I - KH)P_{k|k-1}(I - KH)^T + KRK^T$):
 
 
-
-
 $$
 m_0 = 1.0 - k_0
 $$
@@ -145,7 +148,7 @@ p_{00\_ \text{new}} = (m_0^2 \cdot p_{00\_ \text{m}}) + (k_0^2 \cdot R)
 $$
 
 $$
-p_{01\_ \text{new}} = (m_0 \cdot p_{01\_ \text{m}}) - (k_1 \cdot m_0 \cdot p_{00\_ \text{m}}) + (k_0 \cdot k_1 \cdot R)
+p_{01\_ \text{new}} = m_0 \cdot (p_{01\_ \text{m}} - k_1 \cdot p_{00\_ \text{m}}) + (k_0 \cdot k_1 \cdot R)
 $$
 
 $$
@@ -184,17 +187,16 @@ $$
 
 ### 4. Phase 4: Actuator Trigger Mapping
 
-The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2 \ge 0$) maps to a strictly positive unipolar probability space ($0.0 \le P_{\text{raw}} < 1.0$) via a zero-anchored logistic activation function. This mathematical boundaries effectively compress low-level baseline fluctuations to manage actuator dead-zones, which is then dynamically normalized against the gating threshold ($\theta_{\text{gate}}$):
+The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2 \ge 0$) maps to a strictly positive unipolar probability space ($0.0 \le P_{\text{raw}} \le P_{\text{max}} < 1.0$) via a zero-anchored logistic activation function. This mathematical boundaries effectively compress low-level baseline fluctuations to manage actuator dead-zones, which is then dynamically normalized against the gating threshold ($\theta_{\text{gate}}$) using the empirical maximum achievable intensity ($P_{\text{max}}$):
 
 $$
 P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0
 $$
 
 $$
-P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\\\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}
+P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\\\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{P_{\text{max}} - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}
 $$
 
-$$
-\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}
-$$
+$$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
+
 
