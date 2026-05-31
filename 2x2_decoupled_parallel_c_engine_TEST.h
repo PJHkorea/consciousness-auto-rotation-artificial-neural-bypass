@@ -27,11 +27,11 @@
  * @details Eliminates dynamic memory allocation to guarantee zero-latency execution.
  */
 typedef struct {
-    double p00; /* Prior error covariance element */
-    double p01; /* / Symmetric error covariance element */
-    double p11; /* Prior error covariance element */
-    double x0;  /* State vector element (Signal Amplitude / Intent) */
-    double x1;  /* State vector element (Signal Velocity / Phase) */
+    double p00; /* Prior error covariance element [0,0] */
+    double p01; /* Symmetric error covariance element [0,1] / [1,0] */
+    double p11; /* Prior error covariance element [1,1] */
+    double x0;  /* State vector element [0] (Signal Amplitude / Intent) */
+    double x1;  /* State vector element [1] (Signal Velocity / Phase) */
 } HPNTChannelState;
 
 /**
@@ -93,8 +93,11 @@ static inline int hpnt_execute_channel_step(
      *    Forces positive-definiteness under floating-point round-off errors.
      * ------------------------------------------------------------------------- */
     double p00_new = (one_minus_k0 * one_minus_k0 * p00_m) + (k0 * k0 * r_noise);
-    double p01_new = (one_minus_k0 * p01_m) - (k0 * k1 * p00_m) + (k0 * k1_r_noise); 
-    double p11_new = p11_m - (2.0 * k1 * p01_m) + (k1 * k1 * p00_m) + (k1 * k1_r_noise);
+    
+    /* [수정 포인트] k0 대신 one_minus_k0를 반영하여 정확한 스칼라 전개 수식으로 교정 완료 */
+    double p01_new = (one_minus_k0 * p01_m) - (k1 * one_minus_k0 * p00_m) + (k0 * k1_r_noise); 
+    
+    double p11_new = p11_m - (2.0 * k1 * p01_m) + (k1 * k1 * p00_m) + (k1 * k1 * r_noise);
 
     /* Enforce numerical stability lower bound */
     if (p00_new < 1e-14) p00_new = 1e-14;
