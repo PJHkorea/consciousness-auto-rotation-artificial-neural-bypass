@@ -206,13 +206,17 @@ While the system architecture traces a 2D state-space trajectory, the runtime en
 * **Zero-GC & Deterministic Runtime**: Memory is allocated strictly on the stack within a static channel context. By achieving zero dynamic allocation (`malloc`) and zero Garbage Collection (GC) pauses, the engine guarantees microsecond-level deterministic latency required for live cranial signal processing.
 
 ### 2. Algebraic Scalar Joseph Form Expansion
+
 The mathematical representation of the error covariance update utilizes the **Symmetric Joseph Form Equation** $(I-KH)P(I-KH)^T + KRK^T$ to prevent numerical asymmetry. In the production C engine, this is fully expanded into raw scalar assignments:
+
 ```c
 double p00_new = (one_minus_k0 * one_minus_k0 * p00_m) + (k0 * k0 * r_noise);
 double p01_new = (one_minus_k0 * p01_m) - (k1 * one_minus_k0 * p00_m) + (k0 * k1_r_noise);
 double p11_new = p11_m - (2.0 * k1 * p01_m) + (k1 * k1 * p00_m) + (k1 * k1 * r_noise);
 ```
+
 This formulation enforces positive-definiteness natively at the compiler level, mitigating floating-point truncation errors during long-duration runs.
+
 
 ### 3. Rigorous Boundary Gating & Failsafe Recovery
 The theoretical Cauchy-Schwarz inequality ($\vert p_{01} \vert \le \sqrt{p_{00} \cdot p_{11}}$) noted in the overview is enforced in the execution pipeline via an **Explicit Conditional Case Clipping** mechanism:
