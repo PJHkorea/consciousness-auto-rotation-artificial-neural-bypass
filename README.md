@@ -171,13 +171,12 @@ $$
 \lvert p_{01\_ \text{guard}} \rvert \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}
 $$
 
-#### D. Real-Time Exception & Failsafe Continuity
+#### D. Real-Time Exception & Failsafe Continuity (Safety-Enhanced)
 
-If any numeric anomaly ($NaN$ or Overflow) is detected, or state variables breach hard boundaries ($10^{10}$), the system drops the singular covariance matrix back to identity, but critically preserves the linear system trajectory via the prediction state to ensure actuator signal continuity:
+If any numeric anomaly ($NaN$ or Overflow) is detected, or state variables breach hard boundaries ($10^{10}$), the system immediately aborts the current corrupted timeline. To prevent catastrophic physical jerk in mechanical actuators, the engine rolls back both the state vector and the error covariance to the last verified stable baseline, completely eliminating algorithmic freeze states while preserving kinematically smooth actuator continuity:
 
-$$
-\text{If Anomaly Detected} \Longrightarrow \begin{cases} \mathbf{x}_{k|k} = \mathbf{x}_{k|k-1} \\\\ \mathbf{P}_{k|k} = \mathbf{I} \end{cases}
-$$
+$$\text{If Anomaly Detected} \Longrightarrow \begin{cases} \mathbf{x}_{k|k} = \mathbf{x}_{k-1|k-1} \\ \mathbf{P}_{k|k} = \mathbf{P}_{k-1|k-1} \end{cases}$$
+
 
 ### 4. Phase 4: Actuator Trigger Mapping
 
