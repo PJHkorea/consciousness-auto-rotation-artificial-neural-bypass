@@ -107,14 +107,15 @@ The discrete state-space framework models the system to track the microscopic 10
 The state vector $\hat{\mathbf{x}}_{k|k-1}$ is rotated deterministically in the 2D plane:
 
 $$
-\hat{\mathbf{x}}_{k|k-1} = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1|k-1}
+\hat{\mathbf{x}}_{k|k-1} = 
+\begin{bmatrix} 
+\cos\theta & -\sin\theta \\\\ 
+\sin\theta & \cos\theta 
+\end{bmatrix} 
+\hat{\mathbf{x}}_{k-1|k-1}
 $$
 
-The prior error covariance matrix is expanded algebraically into exact scalar components to preserve numerical symmetry without matrix overhead:
-
-$$
-\mathbf{P}_{k|k-1} = \mathbf{F}\mathbf{P}_{k-1|k-1}\mathbf{F}^T + \mathbf{Q}
-$$
+The prior error covariance matrix is expanded algebraically into exact scalar components to preserve numerical symmetry without matrix overhead ($P_{k|k-1} = FP_{k-1|k-1}F^T + Q$):
 
 $$
 p_{00\_ \text{m}} = (\cos^2\theta \cdot p_{00}) - (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\sin^2\theta \cdot p_{11}) + Q
@@ -130,11 +131,10 @@ $$
 
 #### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
 
-To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the Symmetric Joseph Form Equation:
+To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the Symmetric Joseph Form Equation ($P_{k|k} = (I - KH)P_{k|k-1}(I - KH)^T + KRK^T$):
 
-$$
-\mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}\mathbf{H})\mathbf{P}_{k|k-1}(\mathbf{I} - \mathbf{K}\mathbf{H})^T + \mathbf{K}\mathbf{R}\mathbf{K}^T
-$$
+
+
 
 $$
 m_0 = 1.0 - k_0
@@ -156,29 +156,45 @@ $$
 
 When the innovation covariance falls below safety thresholds due to severe transient noise, boundary mapping prevents zero-division and matrix singularity:
 
-$$\text{If } (p_{00\_ \text{m}} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop}$$
+$$
+\text{If } (p_{00\_ \text{m}} + R) \le 10^{-9} \Longrightarrow \text{Halt Measurement Update Loop}
+$$
 
-$$p_{00\_ \text{guard}} = \max(p_{00\_ \text{new}}, 10^{-14}), \quad p_{11\_ \text{guard}} = \max(p_{11\_ \text{new}}, 10^{-14})$$
+$$
+p_{00\_ \text{guard}} = \max(p_{00\_ \text{new}}, 10^{-14}), \quad p_{11\_ \text{guard}} = \max(p_{11\_ \text{new}}, 10^{-14})
+$$
 
 The Cauchy-Schwarz inequality is strictly enforced in real-time to clip the cross-covariance component against numerical underflow, preventing structural asymmetry and filter explosion:
 
-$$p_{\text{prod}} = p_{00\_ \text{guard}} \cdot p_{11\_ \text{guard}}$$
+$$
+p_{\text{prod}} = p_{00\_ \text{guard}} \cdot p_{11\_ \text{guard}}
+$$
 
-$$\lvert p_{01\_ \text{guard}} \rvert \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}$$
+$$
+\lvert p_{01\_ \text{guard}} \rvert \le \sqrt{\max(p_{\text{prod}}, 10^{-28})}
+$$
 
 #### D. Real-Time Exception & Failsafe Continuity
 
 If any numeric anomaly ($NaN$ or Overflow) is detected, or state variables breach hard boundaries ($10^{10}$), the system drops the singular covariance matrix back to identity, but critically preserves the linear system trajectory via the prediction state to ensure actuator signal continuity:
 
-$$\text{If Anomaly Detected} \Longrightarrow \begin{cases} \mathbf{x}_{k|k} = \mathbf{x}_{k|k-1} \\ \mathbf{P}_{k|k} = \mathbf{I} \end{cases}$$
+$$
+\text{If Anomaly Detected} \Longrightarrow \begin{cases} \mathbf{x}_{k|k} = \mathbf{x}_{k|k-1} \\\\ \mathbf{P}_{k|k} = \mathbf{I} \end{cases}
+$$
 
 ### 4. Phase 4: Actuator Trigger Mapping
 
 The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2 \ge 0$) maps to a strictly positive unipolar probability space ($0.0 \le P_{\text{raw}} < 1.0$) via a zero-anchored logistic activation function. This mathematical boundaries effectively compress low-level baseline fluctuations to manage actuator dead-zones, which is then dynamically normalized against the gating threshold ($\theta_{\text{gate}}$):
 
-$$P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0$$
+$$
+P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0
+$$
 
-$$P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}$$
+$$
+P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\\\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}
+$$
 
-$$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
+$$
+\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}
+$$
 
