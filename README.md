@@ -74,7 +74,7 @@ graph TD
 
 ---
 
-## 📐 Technical Specification (Mathematical Formulation)
+##📐 Technical Specification (Mathematical Formulation)
 
 This section provides the definitive mathematical formulation for the Autobiographical Resonance-based Closed-loop Filter (ARCF).
 
@@ -92,46 +92,65 @@ $$\theta = 2\pi f \Delta t + \phi_{\text{delay}}$$
 
 To enforce strict real-time causality and eliminate reliance on artificial time-arrays, the system continuously tracks the instantaneous signal energy using an Exponential Moving Average (EMA). The conditioned signal is multiplied by a time-varying informational weight ($W_{\text{gate}}[k]$) driven by a continuous sigmoid power synchronization profile:
 
-$$E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{notch}}[k]\right)^2$$
+$$E_{\text{running}}[k] = (1 - \alpha) \cdot E_{\text{running}}[k-1] + \alpha \cdot \left(Y_{\text{ccl}}[k]\right)^2$$
 
 $$W_{\text{gate}}[k] = \max\left(0.1, 0.1 + \frac{0.9}{1 + e^{-2.5 \cdot (E_{\text{running}}[k] - 0.8)}}\right)$$
 
-$$Y_{\text{filtered}}[k] = Y_{\text{notch}}[k] \cdot W_{\text{gate}}[k]$$
+$$Y_{\text{filtered}}[k] = Y_{\text{ccl}}[k] \cdot W_{\text{gate}}[k]$$
 
 ### 3. Phase 3: State-Space Minimal Variance Tracking (Safe-Kalman Core)
 
-The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm ($X_{\text{brain}}$) hidden in the filtered potential.
+The discrete state-space framework models the system to track the microscopic 10 Hz sensorimotor resonance rhythm ($X_{\text{brain}}$) hidden in the filtered potential, using the gated cognitive potential ($Y_{\text{filtered}}$) as the innovation measurement input.
 
 #### A. Time Update (Predictive Step)
 
 The state vector $\hat{\mathbf{x}}_{k|k-1}$ is rotated deterministically in the 2D plane:
 
-$$\hat{\mathbf{x}}_{k|k-1} = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1|k-1}$$
+$$
+\hat{\mathbf{x}}_{k|k-1} = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix} \hat{\mathbf{x}}_{k-1|k-1}
+$$
 
 The prior error covariance matrix is expanded algebraically into exact scalar components to preserve numerical symmetry without matrix overhead:
 
-$$\mathbf{P}_{k|k-1} = \mathbf{F}\mathbf{P}_{k-1|k-1}\mathbf{F}^T + \mathbf{Q}$$
+$$
+\mathbf{P}_{k|k-1} = \mathbf{F}\mathbf{P}_{k-1|k-1}\mathbf{F}^T + \mathbf{Q}
+$$
 
-$$p_{00\_ \text{m}} = (\cos^2\theta \cdot p_{00}) - (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\sin^2\theta \cdot p_{11}) + Q$$
+$$
+p_{00\_ \text{m}} = (\cos^2\theta \cdot p_{00}) - (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\sin^2\theta \cdot p_{11}) + Q
+$$
 
-$$p_{01\_ \text{m}} = (\cos\theta\sin\theta \cdot (p_{00} - p_{11})) + (\cos^2\theta - \sin^2\theta) \cdot p_{01}$$
+$$
+p_{01\_ \text{m}} = (\cos\theta\sin\theta \cdot (p_{00} - p_{11})) + (\cos^2\theta - \sin^2\theta) \cdot p_{01}
+$$
 
-$$p_{11\_ \text{m}} = (\sin^2\theta \cdot p_{00}) + (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\cos^2\theta \cdot p_{11}) + Q$$
-
+$$
+p_{11\_ \text{m}} = (\sin^2\theta \cdot p_{00}) + (2.0 \cdot \cos\theta\sin\theta \cdot p_{01}) + (\cos^2\theta \cdot p_{11}) + Q
+$$
 
 #### B. Joseph Form Covariance Update (Analytical Scalar Expansion)
 
 To enforce absolute positive-definiteness under floating-point round-off errors in low-latency DSP environments, the covariance measurement update is executed via an analytical scalar expansion of the Symmetric Joseph Form Equation:
 
-$$\mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}\mathbf{H})\mathbf{P}_{k|k-1}(\mathbf{I} - \mathbf{K}\mathbf{H})^T + \mathbf{K}\mathbf{R}\mathbf{K}^T$$
+$$
+\mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}\mathbf{H})\mathbf{P}_{k|k-1}(\mathbf{I} - \mathbf{K}\mathbf{H})^T + \mathbf{K}\mathbf{R}\mathbf{K}^T
+$$
 
-$$m_0 = 1.0 - k_0$$
+$$
+m_0 = 1.0 - k_0
+$$
 
-$$p_{00\_ \text{new}} = (m_0^2 \cdot p_{00\_ \text{m}}) + (k_0^2 \cdot R)$$
+$$
+p_{00\_ \text{new}} = (m_0^2 \cdot p_{00\_ \text{m}}) + (k_0^2 \cdot R)
+$$
 
-$$p_{01\_ \text{new}} = (m_0 \cdot p_{01\_ \text{m}}) - (k_1 \cdot m_0 \cdot p_{00\_ \text{m}}) + (k_0 \cdot k_1 \cdot R)$$
+$$
+p_{01\_ \text{new}} = (m_0 \cdot p_{01\_ \text{m}}) - (k_1 \cdot m_0 \cdot p_{00\_ \text{m}}) + (k_0 \cdot k_1 \cdot R)
+$$
 
-$$p_{11\_ \text{new}} = p_{11\_ \text{m}} - (2.0 \cdot k_1 \cdot p_{01\_ \text{m}}) + (k_1^2 \cdot p_{00\_ \text{m}}) + (k_1^2 \cdot R)$$
+$$
+p_{11\_ \text{new}} = p_{11\_ \text{m}} - (2.0 \cdot k_1 \cdot p_{01\_ \text{m}}) + (k_1^2 \cdot p_{00\_ \text{m}}) + (k_1^2 \cdot R)
+$$
 
 #### C. Sub-zero Divergence Guard & Boundary Mapping
 
@@ -159,7 +178,7 @@ The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2
 
 $$P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0$$
 
-$$P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} \lt \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}$$
+$$P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}$$
 
 $$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
 
