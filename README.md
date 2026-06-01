@@ -153,7 +153,7 @@ $$\text{If } P_{\text{state}}[k] > 0.75f \longrightarrow \text{Trigger Actuator 
 
 ---
 
-## 🛠️ Technical Appendix: Precision Guarantees & Code Rectification
+## 🛠 Technical Appendix: Precision Guarantees & Code Rectification
 
 To maintain exact alignment between this mathematical specification and the production C execution engine, the core scalar updates must be grouped as follows to ensure absolute positive-definiteness natively at the compiler level:
 
@@ -170,4 +170,5 @@ float p11_new = p11_m - (2.0f * k1 * one_minus_k0 * p01_m) + (k1_sq * p00_m) + (
 ```
 
 By enforcing these explicit algebraic constraints without a single non-linear square root (`sqrt`) operation, the engine achieves deterministic, microsecond-level execution times suitable for modular, parallel scale-out hardware deployments.
+
 
