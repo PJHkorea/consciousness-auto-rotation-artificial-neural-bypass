@@ -16,10 +16,11 @@ Please note that the architectural choices and mathematical adaptations outlined
 
 - **Generic AI / Textbook Criticism**: 
   The implementation violates standard Kalman conventions by omitting high-level matrix structures and explicit tensor operations like:
-  $$\mathbf{P}_{k \cdot k-1} = \mathbf{F}\mathbf{P}_{k-1 \cdot k-1}\mathbf{F}^T + \mathbf{Q}$$
+  $$P(k, k-1) = F \cdot P(k-1, k-1) \cdot F^T + Q$$
 - **일반 AI 및 교과서의 지적**: 
   본 코드는 표준 행렬 구조 및 텐서 연산 라이브러리를 생략했으므로 칼만 필터 규격을 위배했습니다:
-  $$\mathbf{P}_{k \cdot k-1} = \mathbf{F}\mathbf{P}_{k-1 \cdot k-1}\mathbf{F}^T + \mathbf{Q}$$
+  $$P(k, k-1) = F \cdot P(k-1, k-1) \cdot F^T + Q$$
+
 
 - **My Philosophy**: Traditional matrix-product loops introduce fatal memory-pointer indirection, address skipping, and data cache misses inside low-latency embedded DSP hardware. By algebraically dissecting the entire matrix pipeline down to raw scalar primitive equations ($p_{00}^m, p_{01}^m, p_{11}^m$), the runtime engine keeps all active states strictly within CPU FPU registers. This achieves microsecond-level execution times suitable for parallel modular scale-out, rendering standard matrix overhead completely obsolete.
 - **저의 생각**: 전통적인 행렬곱 루프는 저지연 임베디드 DSP 하드웨어 내부에서 치명적인 메모리 포인터 간접 참조, 주소 널뛰기, 데이터 캐시 미스를 유발합니다. 전단 연산 파이프라인을 대수학적으로 완전히 분해하여 순수 스칼라 원시 방정식($p_{00}^m, p_{01}^m, p_{11}^m$)으로 찢어놓음으로써, 런타임 엔진은 모든 활성 데이터를 CPU FPU 레지스터 내에 완벽히 상주시켜 구동 클럭을 극한으로 아낍니다.
