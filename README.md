@@ -76,10 +76,6 @@ graph TD
 
 ## 📐 Technical Specification (Mathematical Formulation)
 
-This section provides the definitive mathematical formulation for the Autobiographical Resonance-based Closed-loop Filter (ARCF).
-
-## 📐 Technical Specification (Mathematical Formulation)
-
 This section provides the definitive, production-verified mathematical formulation for the Autobiographical Resonance-based Closed-loop Filter (ARCF), optimized for low-latency embedded DSP environments without software matrix overhead or non-linear square root operations.
 
 ### 1. Phase 1: Real-Time Signal Conditioning
