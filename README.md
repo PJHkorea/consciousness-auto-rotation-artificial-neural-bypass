@@ -170,4 +170,3 @@ float p11_new = p11_m - (2.0f * k1 * one_minus_k0 * p01_m) + (k1_sq * p00_m) + (
 ```
 
 By enforcing these explicit algebraic constraints without a single non-linear square root (`sqrt`) operation, the engine achieves deterministic, microsecond-level execution times suitable for modular, parallel scale-out hardware deployments.
-
