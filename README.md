@@ -173,22 +173,18 @@ $$
 
 #### D. Real-Time Exception & Failsafe Continuity (Safety-Enhanced)
 
-If any numeric anomaly ($NaN$ or Overflow) is detected, or state variables breach hard boundaries ($10^{10}$), the system immediately aborts the current corrupted timeline. To prevent catastrophic physical jerk in mechanical actuators, the engine rolls back both the state vector and the error covariance to the last verified stable baseline, completely eliminating algorithmic freeze states while preserving kinematically smooth actuator continuity:
+If any numeric anomaly ($NaN$ or Overflow) is detected via compiler-independent IEEE 754 Bit-level masking, or state variables/covariances breach hard boundaries ($10^{10}$), the system immediately aborts the corrupted timeline. To prevent catastrophic physical jerk in mechanical actuators under aggressive optimization flags (e.g., `-ffast-math`), the engine rolls back both the state vector and the error covariance to the last verified stable baseline, preserving kinematically smooth actuator continuity:
 
-$$\text{If Anomaly Detected} \Longrightarrow \begin{cases} \mathbf{x}_{k|k} = \mathbf{x}_{k-1|k-1} \\ \mathbf{P}_{k|k} = \mathbf{P}_{k-1|k-1} \end{cases}$$
+$$\text{If } \Big( \text{BitNaN}(x_0) \lor \text{BitNaN}(x_1) \lor \vert{}x_0\vert{} > 10^{10} \lor \vert{}x_1\vert{} > 10^{10} \lor P_{00} > 10^{10} \lor P_{11} > 10^{10} \Big) \Longrightarrow \begin{cases} \mathbf{x}_{k|k} = \mathbf{x}_{k-1|k-1} \\ \mathbf{P}_{k|k} = \mathbf{P}_{k-1|k-1} \end{cases}$$
 
 
 ### 4. Phase 4: Actuator Trigger Mapping
 
-The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2 \ge 0$) maps to a strictly positive unipolar probability space ($0.0 \le P_{\text{raw}} \le P_{\text{max}} < 1.0$) via a zero-anchored logistic activation function. This mathematical boundaries effectively compress low-level baseline fluctuations to manage actuator dead-zones, which is then dynamically normalized against the gating threshold ($\theta_{\text{gate}}$) using the empirical maximum achievable intensity ($P_{\text{max}}$):
+The state vector's instantaneous power extraction energy ($E = x_{0}^2 + x_{1}^2 \ge 0$) maps to a strictly positive unipolar probability space ($0.0 \le P_{\text{raw}} \le 1.0$) via a zero-anchored logistic activation function. Hard clipping at $4.0$ prevents high-order Padé polynomial saturation flattening at infinity:
 
-$$
-P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0
-$$
+$$ P_{\text{raw}} = \frac{2.0}{1.0 + e^{-\lambda \cdot E}} - 1.0 $$
 
-$$
-P_{\text{state}}[k] = \begin{cases} 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \\\\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{P_{\text{max}} - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \end{cases}
-$$
+$$ P_{\text{state}}[k] = \begin{cases} 1.0 & \text{if } \lambda \cdot E > 4.0 \\ \frac{P_{\text{raw}} - \theta_{\text{gate}}}{1.0 - \theta_{\text{gate}}} & \text{if } P_{\text{raw}} \ge \theta_{\text{gate}} \land \lambda \cdot E \le 4.0 \\ 0.0 & \text{if } P_{\text{raw}} < \theta_{\text{gate}} \end{cases} $$
 
 $$\text{If } P_{\text{state}}[k] > 0.75 \longrightarrow \text{Trigger Actuator Controller (Exoskeleton Active)}$$
 
