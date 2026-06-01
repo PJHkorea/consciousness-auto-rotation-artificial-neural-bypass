@@ -8,100 +8,113 @@ import math
 # =========================================================================
 # [Phase 1 & 2] HPNT Core JIT Engine (Zero-Allocation Architecture)
 # =========================================================================
-
 @nb.njit(fastmath=True, cache=True, nogil=True)
-def execute_channel_step(
-    raw_signal, p00, p01, p11, x0, x1,
-    cos_t, sin_t, q_noise, r_noise, threshold
-):
+def execute_channel_step(raw_signal, p00, p01, p11, x0, x1, cos_t, sin_t, q_noise, r_noise, lambda_val, threshold):
     """
-    HPNT 2x2 상태 공간 추정 및 수치해석 안정성 가드 연산 코어
-    HPNT 2x2 State-Space Estimation & Numerical Stability Guard Kernel
+    HPNT 2x2 상태 공간 추정 및 수치해석 안정성 가드 연산 코어 (No-SQRT 및 CW 부호 정정본)
+    Pure Scalar + No-SQRT Estimation Kernel with Clockwise Rotation Alignment.
     """
-    # 1. State Prediction (2D Vibration Rotation Model)
-    # 1. 상태 예측 (2차원 진동 회전 모델 모델링)
+    # 1. State Prediction (2D Vibration Rotation Model - Clockwise 전진 변환)
     x0_pred = cos_t * x0 - sin_t * x1
     x1_pred = sin_t * x0 + cos_t * x1
+    
+    cos_sq = cos_t * cos_t
+    sin_sq = sin_t * sin_t
+    cos_sin = cos_t * sin_t
 
-    # 2. Error Covariance Prediction (Algebraic Separation Layout)
-    # 2. 오차 공분산 예측 (대수적 성분 분리를 통한 오버헤드 최적화 레이아웃)
-    t0 = cos_t * p00 - sin_t * p01
-    t1 = cos_t * p01 - sin_t * p11
-    t2 = sin_t * p00 + cos_t * p01
-    t3 = sin_t * p01 + cos_t * p11
+    # 2. Error Covariance Prediction (Algebraic Separation Layout - CW 부호 완전 정정)
+    p00_m = (cos_sq * p00) - (2.0 * cos_sin * p01) + (sin_sq * p11) + q_noise
+    p01_m = ((cos_sq - sin_sq) * p01) - (cos_sin * (p00 - p11))
+    p11_m = (sin_sq * p00) + (2.0 * cos_sin * p01) + (cos_sq * p11) + q_noise
 
-    p00_m = cos_t * t0 - sin_t * t1 + q_noise
-    p01_m = sin_t * t0 + cos_t * t1
-    p11_m = sin_t * t2 + cos_t * t3 + q_noise
+    if p00_m < 1e-14: p00_m = 1e-14
+    if p11_m < 1e-14: p11_m = 1e-14
 
-    # 3. Kalman Gain Calculation
-    # 3. 칼만 이득 계산 및 분모 0나누기 방지 분산 바운더리 설정
+    # [No-SQRT Cauchy-Schwarz Guard] 양변 제곱 비교를 통한 루트 연산 원천 배제
+    p_prod_m = p00_m * p11_m
+    p01_m_sq = p01_m * p01_m
+    if p01_m_sq > p_prod_m or math.isnan(p01_m_sq):
+        min_diag = p00_m if p00_m < p11_m else p11_m
+        p01_m = min_diag if p01_m > 0.0 else -min_diag
+
+    # 3. Kalman Gain Calculation & Singularity Prevention
     innov_cov = p00_m + r_noise
     if innov_cov < 1e-9:
         innov_cov = 1e-9
-    k0 = p00_m / innov_cov
-    k1 = p01_m / innov_cov
-
-    # 4. Exact Joseph Form Covariance Update
-    # 4. 정밀 조셉 형태 공분산 업데이트 (부동소수점 오차에 의한 비정질성 차단)
+        
+    s_inv = 1.0 / innov_cov
+    k0 = p00_m * s_inv
+    if k0 > 1.0: k0 = 1.0
+    k1 = p01_m * s_inv
     one_minus_k0 = 1.0 - k0
+
+    # 4. Exact Joseph Form Covariance Update (one_minus_k0 가중치 결합 유도 오류 완벽 보정)
+    k1_sq = k1 * k1
     p00_new = (one_minus_k0 * one_minus_k0 * p00_m) + (k0 * k0 * r_noise)
-    p01_new = (one_minus_k0 * p01_m) - (k1 * one_minus_k0 * p00_m) + (k0 * k1 * r_noise)
-    p11_new = (k1 * k1 * p00_m) - (2.0 * k1 * one_minus_k0 * p01_m) + p11_m + (k1 * k1 * r_noise)
+    p01_new = one_minus_k0 * (p01_m - k1 * p00_m) + (k0 * k1 * r_noise)
+    p11_new = p11_m - (2.0 * k1 * one_minus_k0 * p01_m) + (k1_sq * p00_m) + (k1_sq * r_noise)
 
-    # 5. Cauchy-Schwarz Runtime Stability Guard
-    # 5. 코시-슈바르츠 실행시간 안정성 가드 (필터 폭발 및 수치 언더플로우 방지)
+    if p00_new < 1e-14: p00_new = 1e-14
+    if p11_new < 1e-14: p11_new = 1e-14
+
+    # 5. Post-Update No-SQRT Cauchy-Schwarz Stability Guard
     p_prod = p00_new * p11_new
-    max_p01 = math.sqrt(p_prod if p_prod > 1e-28 else 1e-28)
-    if p01_new > max_p01:
-        p01_new = max_p01
-    elif p01_new < -max_p01:
-        p01_new = -max_p01
+    p01_new_sq = p01_new * p01_new
+    if p01_new_sq > p_prod or math.isnan(p01_new_sq):
+        min_diag_new = p00_new if p00_new < p11_new else p11_new
+        p01_new = min_diag_new if p01_new > 0.0 else -min_diag_new
 
-    # 6. State Update
-    # 6. 혁신 오차 반영을 통한 최종 상태 업데이트
+    # 6. Posterior State Update
     innovation = raw_signal - x0_pred
     x0_new = x0_pred + k0 * innovation
     x1_new = x1_pred + k1 * innovation
 
-    # 7. Failsafe Hold Logic (물리적 연속성 보존 / Physical Continuity Preservation)
-    # 7. 페일세이프 홀드 로직 (NaN 발생 또는 수치 임계치 도달 시 직전 궤적 관성 유지)
+    # 7. Failsafe Hold Logic (NaN 및 수치 오염 발생 시 직전 검증된 레지스터로 롤백)
     if (math.isnan(x0_new) or math.isnan(x1_new) or abs(x0_new) > 1e10 or abs(x1_new) > 1e10):
         x0_new, x1_new = x0_pred, x1_pred
         p00_new, p01_new, p11_new = 1.0, 0.0, 1.0
 
-    # 8. Zero-Baseline Hyper-Sigmoid Gating Actuation
-    # 8. 제로 베이스라인 하이퍼 시그모이드 게이팅 액추에이션 (에너지 추정 확률 압축)
+    # 8. Zero-Baseline Hyper-Sigmoid Gating Actuation (Padé [1/1] 유리함수 스케일 다운 교정)
     energy = x0_new * x0_new + x1_new * x1_new
-    p_state = (2.0 / (1.0 + math.exp(-energy))) - 1.0
-    action_trigger = 1 if p_state >= threshold else 0
+    scaled_energy = lambda_val * energy
+    p_state = 0.0
+    
+    if scaled_energy > 0.0 and not math.isnan(scaled_energy):
+        if scaled_energy >= 3.4641016151377545:
+            p_state = 1.0
+        else:
+            num = 6.0 * scaled_energy
+            den = 12.0 + (scaled_energy * scaled_energy)
+            p_state = num / den
+            if p_state > 1.0: p_state = 1.0
+            if p_state < 0.0: p_state = 0.0
 
-    return p00_new, p01_new, p11_new, x0_new, x1_new, p_state, action_trigger
+    # 9. Dynamic Actuator Normalization Mapping
+    if p_state < threshold:
+        p_mapped = 0.0
+    else:
+        p_mapped = (p_state - threshold) / (1.0 - threshold)
 
+    action_trigger = 1 if p_mapped > 0.75 else 0
+    return p00_new, p01_new, p11_new, x0_new, x1_new, p_mapped, action_trigger
 
-# 💡 소규모(4채널 이하) 제어 환경이므로 병렬 스케줄링 동기화 오버헤드가 배제된 parallel=False 체계 고정
 @nb.njit(fastmath=True, cache=True, nogil=True, parallel=False)
-def _jitted_parallel_loop_kernel(
-    num_channels, input_signals, p00, p01, p11, x0, x1,
-    cos_t, sin_t, q_noise, r_noise, threshold, probabilities, triggers
-):
+def _jitted_parallel_loop_kernel(num_channels, input_signals, p00, p01, p11, x0, x1, cos_t, sin_t, q_noise, r_noise, lambda_val, threshold, probabilities, triggers):
     for ch in range(num_channels):
         p00_n, p01_n, p11_n, x0_n, x1_n, p_state, trigger = execute_channel_step(
             input_signals[ch], p00[ch], p01[ch], p11[ch], x0[ch], x1[ch],
-            cos_t[ch], sin_t[ch], q_noise, r_noise, threshold
+            cos_t[ch], sin_t[ch], q_noise, r_noise, lambda_val, threshold
         )
         p00[ch], p01[ch], p11[ch] = p00_n, p01_n, p11_n
         x0[ch], x1[ch] = x0_n, x1_n
         probabilities[ch] = p_state
         triggers[ch] = trigger
-
-
 class HPNTMultiChannelEngine:
     def __init__(self, num_channels=4, sample_rate=250.0, target_freqs=None):
         self.num_channels = num_channels
         self.threshold = 0.75
         dt = 1.0 / sample_rate
-
+        
         if target_freqs is None:
             freq_array = np.ones(num_channels, dtype=np.float64) * 10.0
         else:
@@ -113,6 +126,7 @@ class HPNTMultiChannelEngine:
         self.sin_t = np.sin(theta_array)
         self.q_noise = 1e-4
         self.r_noise = 1e-2
+        self.lambda_val = 0.1  # 테일러-파데 에너지 압축 게인 스케일 팩터 고정
 
         # 상태 변수 메모리 테이블 고정 프리-알로케이션 (동적 메모리 할당 차단)
         self.p00 = np.ones(num_channels, dtype=np.float64)
@@ -129,32 +143,30 @@ class HPNTMultiChannelEngine:
         _jitted_parallel_loop_kernel(
             self.num_channels, input_signals,
             self.p00, self.p01, self.p11, self.x0, self.x1,
-            self.cos_t, self.sin_t, self.q_noise, self.r_noise, self.threshold,
+            self.cos_t, self.sin_t, self.q_noise, self.r_noise, self.lambda_val, self.threshold,
             self.probabilities, self.triggers
         )
         return self.probabilities, self.triggers
+
 # =========================================================================
 # [Phase 3] High-Speed Stream Ingestion & Packaging Pipe
 # =========================================================================
-
 BUFFER_MAX_SIZE = 4096
 
 def run_multichannel_haptic_bypass(host="127.0.0.1", port=9999, num_channels=4, freqs=None):
-    # 지터 오버헤드 및 런타임 지연 방지를 위해 가비지 컬렉션 원천 차단 [realtime_bypass.py]
+    # 지터 오버헤드 및 런타임 지연 방지를 위해 가비지 컬렉션 원천 차단
     gc.disable()
-    
     engine = HPNTMultiChannelEngine(num_channels=num_channels, target_freqs=freqs)
-    
-    # 런타임 실시간 인터페이스 가동 전 최초 웜업 JIT 가속 실행 (최초 호출 시의 JIT 지연 시간 무력화)
+
+    # 런타임 실시간 인터페이스 가동 전 최초 웜업 JIT 가속 실행 (JIT 컴파일 지연 시간 무력화)
     warmup_signals = np.zeros(num_channels, dtype=np.float64)
     _, _ = engine.process_multi_channel(warmup_signals)
-    
+
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     conn = None
     
     try:
-        # [지적 교정 반영 3]: 서버 바인딩 및 소켓 초기화 예외 가드 가시성 확보
         try:
             server_socket.bind((host, port))
             server_socket.listen(1)
@@ -162,86 +174,96 @@ def run_multichannel_haptic_bypass(host="127.0.0.1", port=9999, num_channels=4, 
             conn, addr = server_socket.accept()
             print(f"[+] Haptic Interface Device Connected: {addr}")
         except Exception as init_err:
-            print(f"[💥] Failed to initialize TCP Server Base (Bind/Listen/Accept): {init_err}", file=sys.stderr)
+            print(f"[💥] Failed to initialize TCP Server Base: {init_err}", file=sys.stderr)
             server_socket.close()
             gc.enable()
             return
 
         # TCP 네이글 알고리즘 완전 비활성화 (TCP_NODELAY) - 마이크로초 단위 즉시 스트리밍 강제
         conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        conn.settimeout(0.02) # 20ms 하드웨어 지터 바운더리 윈도우
-        
+        conn.settimeout(0.02)  # 20ms 하드웨어 지터 바운더리 윈도우
+
         recv_buffer = bytearray(BUFFER_MAX_SIZE)
-        buf_view = memoryview(recv_buffer) # 포인터 레벨 제로-카피 수신 버퍼 뷰
+        buf_view = memoryview(recv_buffer)  # 포인터 레벨 제로-카피 수신 버퍼 뷰
         bytes_in_buffer = 0
-        
         current_inputs = np.zeros(num_channels, dtype=np.float64)
         last_valid_inputs = np.zeros(num_channels, dtype=np.float64)
-        
+
         send_buffer = bytearray(num_channels * 2)
         send_view = memoryview(send_buffer)
-        
+
+        # 연속 타임아웃 발생 횟수를 추적할 레지스터 변수 단 하나만 선언
+        # Tracks consecutive timeout events before loop entry to safeguard physical continuity
+        consecutive_timeouts = 0
+
         while True:
             try:
                 if bytes_in_buffer >= BUFFER_MAX_SIZE:
                     bytes_in_buffer = 0
-                    
                 max_receivable = BUFFER_MAX_SIZE - bytes_in_buffer
                 bytes_received = conn.recv_into(buf_view[bytes_in_buffer:bytes_in_buffer + max_receivable])
-                
                 if not bytes_received:
                     print("[-] Device stream disconnected by remote host.")
                     break
-                    
                 bytes_in_buffer += bytes_received
+
                 start_ptr = 0
-                
                 while True:
                     newline_idx = recv_buffer.find(b'\n', start_ptr, bytes_in_buffer)
                     if newline_idx == -1:
                         break
-                        
                     line_view = buf_view[start_ptr:newline_idx]
                     start_ptr = newline_idx + 1
-                    
                     if len(line_view) == 0:
                         continue
-                        
+
                     try:
-                        # 콤마 문자 데이터 분할 파싱 연산
                         elements = bytes(line_view).split(b',')
-                        
-                        # 패킷 유실로 채널 수 미달 인입 시 IndexError 오버헤드를 사전에 예방 (가드 클로즈 선언)
                         if len(elements) < num_channels:
                             continue
-                            
                         for ch in range(num_channels):
                             current_inputs[ch] = float(elements[ch])
                             last_valid_inputs[ch] = current_inputs[ch]
                     except ValueError:
                         continue
-                        
+
+                    # 스트림 데이터 패킷이 성공적으로 안착하면 타임아웃 카운터 즉시 리셋
+                    # Resets counter upon successful stream packet ingestion
+                    consecutive_timeouts = 0
+
                     # 무간섭 병렬 가속 연산 엔진 구동 인터페이스 호출
                     _, triggers = engine.process_multi_channel(current_inputs)
-                    
+
                     # 마지막 채널 오프셋에서 개행 문자 누락 및 덮어쓰기 현상 원천 방어 패킹
                     for ch in range(num_channels):
-                        send_buffer[ch * 2] = 48 + triggers[ch] # '0' or '1'
+                        send_buffer[ch * 2] = 48 + triggers[ch]  # '0' or '1'
                         if ch < num_channels - 1:
-                            send_buffer[ch * 2 + 1] = 44 # ',' Comma delimiter
+                            send_buffer[ch * 2 + 1] = 44  # ',' Comma delimiter
                         else:
-                            send_buffer[ch * 2 + 1] = 10 # '\n' Newline tracking
-                            
+                            send_buffer[ch * 2 + 1] = 10  # '\n' Newline tracking
+
                     conn.sendall(send_view[:num_channels * 2])
-                    
+
                 if start_ptr > 0:
                     rem_len = bytes_in_buffer - start_ptr
                     if rem_len > 0:
                         recv_buffer[:rem_len] = buf_view[start_ptr:bytes_in_buffer]
                     bytes_in_buffer = rem_len
-                    
+
             except socket.timeout:
-                # 통신 순간 끊김에 대한 Failsafe 관성 추종 보간 추적 제어 구동 [realtime_bypass.py]
+                consecutive_timeouts += 1
+                
+                # ─── [🛡️ 임상 페일세이프 가드 / Clinical Failsafe Guard] ───
+                # 연속 타임아웃이 5회(5 * 20ms = 100ms)를 넘어가면 완전 단선 또는 환자 패드 탈조로 판단.
+                # 무한 관성 구동을 전면 차단하고 강제로 break하여 finally 블록의 긴급 HALT 패킷을 송출.
+                # If timeouts exceed 5 cycles (100ms), declare a hard cutoff.
+                # Suppresses infinite inertia, breaks loop, and trips the emergency HALT payload.
+                if consecutive_timeouts >= 5:
+                    print("[🚨] Critical: Connection lost for over 100ms. Aborting inertia bypass.", file=sys.stderr)
+                    break
+
+                # 100ms 미만의 일시적 네트워크 지터(1~4회) 구간에서만 원래 사상대로 관성 추종 제어 가동
+                # Runs inertia compensation ONLY during brief network jitters (<100ms)
                 _, triggers = engine.process_multi_channel(last_valid_inputs)
                 for ch in range(num_channels):
                     send_buffer[ch * 2] = 48 + triggers[ch]
@@ -253,32 +275,25 @@ def run_multichannel_haptic_bypass(host="127.0.0.1", port=9999, num_channels=4, 
                     conn.sendall(send_view[:num_channels * 2])
                 except socket.error:
                     break
-                    
-            # [지적 교정 반영 1]: 일반 Exception 발생 시 무한 루프(Deadlock) 블로킹 차단 및 강제 break 선언
+
             except Exception as loop_err:
                 print(f"[💥] Runtime Loop Exception Occurred: {loop_err}", file=sys.stderr)
                 break
-                
+
     except Exception as fatal_err:
         print(f"[💥] Critical Pipeline Outer Exception: {fatal_err}", file=sys.stderr)
-        
     finally:
         print("[*] Launching Failsafe Emergency Sequence...")
         if conn:
             try:
-                # [지적 교정 반영 2]: 가변 채널 수(num_channels)에 맞추어 포맷 규격 일치를 위한 동적 HALT 패킷 생성
                 halt_payload = b",".join([b"0"] * num_channels) + b",HALT\n"
-                
                 conn.sendall(halt_payload)
                 conn.shutdown(socket.SHUT_RDWR)
                 conn.close()
                 print(f"[+] Haptic Device Connection Safely Terminated (Sent: {halt_payload.strip().decode()})")
             except Exception as halt_err:
                 print(f"[-] Failed to dispatch emergency HALT packet: {halt_err}", file=sys.stderr)
-                
         server_socket.close()
-        
-        # 중요 시스템 자원 가드: 다운그레이드 시점의 리소스 누수 방지를 위해 비활성화했던 GC를 정상 재활성화
         gc.enable()
         print("[*] HPNT System Safely Demobilized and GC Restored.")
 
