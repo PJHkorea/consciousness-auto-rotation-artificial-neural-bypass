@@ -1,5 +1,5 @@
 /**
- * @file FluxMesh_TEST_Scalar_Core.h
+ * @file FluxMesh_TEST_64x_Scalar_Core.h
  * @brief Fully Flattened Scalar Node Architecture with Complete Numerical Integrity.
  * 
  * @note [KR] 2x2 행렬을 완전히 제거하고, 제곱합 기반의 절대 양수 부호 보장 및 
@@ -23,8 +23,8 @@
  *               You must only employ standard compliant optimization flags such as '-O2' or '-O3'.
  */
 
-#ifndef FLUXMESH_TEST_SCALAR_CORE_H
-#define FLUXMESH_TEST_SCALAR_CORE_H
+#ifndef FLUXMESH_TEST_64X_SCALAR_CORE_H
+#define FLUXMESH_TEST_64X_SCALAR_CORE_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -154,4 +154,4 @@ static inline LocalVector2D process_topological_node_step(MeshNodeState* self, d
     return output_vector;
 }
 
-#endif /* FLUXMESH_TEST_SCALAR_CORE_H */
+#endif /* FLUXMESH_TEST_64X_SCALAR_CORE_H */
