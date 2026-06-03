@@ -1,10 +1,25 @@
 # 📐 Architectural Scalability & Neural Bypass Mechanisms of the Primitive Core
-
 # 📐 원천 세포 아키텍처의 매시(Mesh) 확장성 및 인공신경망 우회 메커니즘
 
-Target Implementation Block: This technical specification provides the definitive architectural philosophy and mathematical verification for the unified hybrid engine implemented in `fluxmesh_hybrid_test_core.h`.
+> **Target Implementation Block:** This technical specification provides the definitive architectural philosophy and mathematical verification for the unified hybrid engine implemented in `fluxmesh_hybrid_test_core.h`.
+> **대상 구현체:** 본 기술 명세서는 `fluxmesh_hybrid_test_core.h`에 구현된 통합 하이브리드 엔진의 아키텍처적 사상과 수치해석적 검증을 제공합니다.
 
-대상 구현체: 본 기술 명세서는 `fluxmesh_hybrid_test_core.h`에 구현된 통합 하이브리드 엔진의 아키텍처적 사상과 수치해석적 검증을 제공합니다.
+---
+
+### ⚠️ LEGAL NOTICE & LIABILITY DISCLAIMER (법적 고지 및 면책 조항)
+
+**[English]**
+The architectural choices, directional coupling signs, and mathematical formulations detailed herein represent the author's proprietary engineering philosophy and technical viewpoints. This specification is provided **"AS IS" WITHOUT ANY WARRANTY OF ANY KIND**, expressed or implied, including but not limited to suitability for specific hardware, non-infringement of external patents, or system stability under volatile runtime conditions. 
+
+By employing, copying, or forking this repository under the **GNU GPL v3**, the user explicitly acknowledges that this firmware is a highly tailored raw mathematical template for distributed neuromorphic environments and may naturally diverge from standard textbook conventions. The author shall **NEVER be held liable** for any direct, indirect, incidental, or consequential damages, hardware failures, or systemic thermal runaway caused by user implementation. If these paradigms do not conform to your validation framework, you are strictly required to either fork and customize at your own risk or terminate use immediately.
+
+**[한국어]**
+본 문서에 기술된 아키텍처적 선택, 방향성 결합 부호 및 수식 변형들은 어디까지나 저 개인의 엔지니어링 철학과 실전 제어 사상에 기반한 주관적 기술 자산입니다. 본 명세는 **어떠한 형태의 명시적·묵시적 보증 없이 "있는 그대로(AS IS)" 제공**되며, 특정 하드웨어와의 적합성, 타 기관의 특허 비침해성, 혹은 런타임 환경에서의 시스템 안정성을 보장하지 않습니다. 
+
+**GNU GPL v3** 라이선스 하에 본 레포지토리를 사용, 복제, 또는 포크(Fork)하는 모든 사용자는 본 엔진이 초저지연 뉴로모픽 환경에 극단적으로 조율된 원시 수학적 템플릿이며, 범용 교과서의 표준 규격과 상이할 수 있음을 선언적으로 동의한 것으로 간주합니다. 사용자의 이식 및 구동 과정에서 발생하는 시스템 오작동, 하드웨어 파손, 열 폭주 또는 수치적 발산에 대해 **원작자는 일체의 법적·재정적 책임을 지지 않습니다.** 본 설계 사상이 귀하의 검증 프레임워크 및 안전 기준에 부합하지 않는다고 판단될 경우, 본인의 책임하에 코드를 수정하거나 즉시 사용을 중단해야 합니다.
+
+---
+
 
 
 Please note that the architectural choices, directional coupling signs, and mathematical adaptations outlined below represent my personal engineering philosophy, real-time control methodology, and subjective technical viewpoint. Since this specification is rigorously tailored for specific low-latency, neuromorphic distributed hardware environments, certain formulations may naturally diverge from standard universal textbook tenets. If you believe these criteria are unsuitable for your specific operational framework or require alternative optimization, you are highly encouraged to fork, rectify, and customize this repository to fit your precise hardware needs.
