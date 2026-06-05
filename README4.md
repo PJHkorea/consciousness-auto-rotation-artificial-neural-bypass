@@ -23,7 +23,7 @@ Please note that the architectural choices, directional coupling signs, and math
 
 
 
-### 1. Architectural Philosophy & External Isolation
+### 1. Architectural Philosophy & External Isolation ([fluxmesh_trat_scheduler_test.h](./fluxmesh_trat_scheduler_test.h))
 #### 🌐 English Specification
 The core system architecture adopts a decentralized multi-chassis processing paradigm to gracefully isolate the pure hybrid core from non-deterministic external I/O protocol overheads. The underlying infrastructure establishes a horizontal parallel topology across three independent, cost-effective microprocessing nodes (Node-A, Node-B, and Node-C) linked via a high-speed communication bus. While the embedded core mesh executes arithmetic scalar equations with minimal hardware footprint, external network packet handshakes and buffering are effectively managed at the outer peripheral boundaries of this distributed layout.
 
