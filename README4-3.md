@@ -1,3 +1,25 @@
+# ⚠️ LEGAL NOTICE & LIABILITY DISCLAIMER (법적 고지 및 면책 조항)
+
+### 🌐 English Specification
+The architectural choices, directional coupling signs, and mathematical formulations detailed herein represent the author's proprietary engineering philosophy and technical viewpoints. This specification is provided **"AS IS" WITHOUT ANY WARRANTY OF ANY KIND**, expressed or implied, including but not limited to suitability for specific hardware, non-infringement of external patents, or system stability under volatile runtime conditions.
+
+By employing, copying, or forking this repository under the **GNU GPL v3**, the user explicitly acknowledges that this firmware is a highly tailored raw mathematical template for distributed neuromorphic environments and may naturally diverge from standard textbook conventions. The author shall **NEVER** be held liable for any direct, indirect, incidental, or consequential damages, hardware failures, or systemic thermal runaway caused by user implementation. If these paradigms do not conform to your validation framework, you are strictly required to either fork and customize at your own risk or terminate use immediately.
+
+### 🇰🇷 한글 규격 명세
+본 문서에 기술된 아키텍처적 선택, 방향성 결합 부호 및 수식 변형들은 어디까지나 저 개인의 엔지니어링 철학과 실전 제어 사상에 기반한 주관적 기술 자산입니다. 본 명세는 어떠한 형태의 명시적·묵시적 보증 없이 **"있는 그대로(AS IS)"** 제공되며, 특정 하드웨어와의 적합성, 타 기관의 특허 비침해성, 혹은 런타임 환경에서의 시스템 안정성을 보장하지 않습니다.
+
+GNU GPL v3 라이선스 하에 본 레포지토리를 사용, 복제, 또는 포크(Fork)하는 모든 사용자는 본 엔진이 초저지연 뉴로모픽 환경에 극단적으로 조율된 원시 수학적 템플릿이며, 범용 교과서의 표준 규격과 상이할 수 있음을 **선언적으로 동의한 것**으로 간주합니다. 사용자의 이식 및 구동 과정에서 발생하는 시스템 오작동, 하드웨어 파손, 열 폭주 또는 수치적 발산에 대해 **원작자는 일체의 법적·재정적 책임을 지지 않습니다.** 본 설계 사상이 귀하의 검증 프레임워크 및 안전 기준에 부합하지 않는다고 판단될 경우, 본인의 책임하에 코드를 수정하거나 즉시 사용을 중단해야 합니다.
+
+---
+
+### 🌐 Engineering Philosophy Note
+Please note that the architectural choices, directional coupling signs, and mathematical adaptations outlined below represent my personal engineering philosophy, real-time control methodology, and subjective technical viewpoint. Since this specification is rigorously tailored for specific low-latency, neuromorphic distributed hardware environments, certain formulations may naturally diverge from standard universal textbook tenets. If you believe these criteria are unsuitable for your specific operational framework or require alternative optimization, you are highly encouraged to fork, rectify, and customize this repository to fit your precise hardware needs.
+
+### 🇰🇷 엔지니어링 철학 및 설계 사상
+본 문서에 기술된 아키텍처적 선택, 방향성 결합 부호 및 수식 변형들은 어디까지나 저 개인의 엔지니어링 철학과 실전 제어 사상에 기반한 주관적 견해입니다. 본 명세는 극단적인 저지연·초저발열 분산형 뉴로모픽 하드웨어 구동을 타겟으로 정밀 조율되었으므로, 보편적인 학술 교과서의 표준 규격이나 범용 선형대수학 관점에서는 분석 방향에 따라 이견이 존재할 수 있습니다. 만약 이 설계가 본인의 하드웨어 플랫폼 및 실험 환경에 맞지 않거나 정정이 필요한 부분이라고 판단되신다면, 언제든 자유롭게 코드를 포크(Fork)하고 본인의 제어 목적에 맞게 수정·보완하여 사용해 주시면 감사하겠습니다.
+
+---
+
 # 🎰 [SPECIFICATION 4-3] Isolated Constant Switching & Hot-Swap Mutation Guard
 ### (상수 격리 스위칭 및 핫스왑 뮤테이션 가드 런타임 수렴 명세서)
 
